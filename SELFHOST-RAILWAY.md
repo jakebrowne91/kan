@@ -35,7 +35,14 @@ openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
 
 - Build with Railpack using `pnpm railway:build`.
 - Start the app with `pnpm railway:start`.
-- Run migrations as part of startup before launching Next.js.
+
+## Migrations
+
+Run migrations manually after changing schema:
+
+```sh
+POSTGRES_URL="$(railway variable list --service Postgres --json | jq -r .DATABASE_PUBLIC_URL)" pnpm railway:migrate
+```
 
 ## After Adding a Custom Domain
 
