@@ -30,7 +30,6 @@ import { EditYouTubeModal } from "~/components/YouTubeEmbed/EditYouTubeModal";
 import { useDragToScroll } from "~/hooks/useDragToScroll";
 import { usePermissions } from "~/hooks/usePermissions";
 import { useScrollRestore } from "~/hooks/useScrollRestore";
-import { useKeyboardShortcut } from "~/providers/keyboard-shortcuts";
 import { useModal } from "~/providers/modal";
 import { usePopup } from "~/providers/popup";
 import { useWorkspace } from "~/providers/workspace";
@@ -65,6 +64,13 @@ const isEditableTarget = (target: EventTarget | null) => {
       'input, textarea, select, button, a, [contenteditable="true"], [role="dialog"]',
     ),
   );
+};
+
+const priorityCycle = [null, "urgent", "high", "medium", "low"] as const;
+
+const getNextPriority = (priority: CardPriority | null) => {
+  const currentIndex = priorityCycle.indexOf(priority);
+  return priorityCycle[(currentIndex + 1) % priorityCycle.length] ?? null;
 };
 
 export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
@@ -398,14 +404,6 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     ],
   );
 
-  useKeyboardShortcut({
-    type: "PRESS",
-    stroke: { key: "C" },
-    action: () => openNewCardForm(),
-    description: t`New card`,
-    group: "ACTIONS",
-  });
-
   useEffect(() => {
     if (
       selectedCardPublicId &&
@@ -444,6 +442,40 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     },
     [boardData?.lists, canEditCard, selectedCardInfo, updateCardMutation],
   );
+
+  const moveSelectedCardToDone = useCallback(() => {
+    if (!canEditCard || !selectedCardInfo) return;
+
+    if (selectedCardInfo.card.publicId.startsWith("PLACEHOLDER")) return;
+
+    const doneList = boardData?.lists.find(
+      (list) => list.name.trim().toLowerCase() === "done",
+    );
+
+    if (!doneList) {
+      showPopup({
+        header: t`Done list not found`,
+        message: t`Create a list named Done first.`,
+        icon: "error",
+      });
+      return;
+    }
+
+    if (doneList.publicId === selectedCardInfo.list.publicId) return;
+
+    updateCardMutation.mutate({
+      cardPublicId: selectedCardInfo.card.publicId,
+      listPublicId: doneList.publicId,
+      index: doneList.cards.length,
+    });
+    setSelectedPublicListId(doneList.publicId);
+  }, [
+    boardData?.lists,
+    canEditCard,
+    selectedCardInfo,
+    showPopup,
+    updateCardMutation,
+  ]);
 
   const moveSelection = useCallback(
     (direction: "up" | "down" | "left" | "right") => {
@@ -540,6 +572,25 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       }
 
       if (
+        key === "p" &&
+        canEditCard &&
+        !selectedCardInfo.card.publicId.startsWith("PLACEHOLDER")
+      ) {
+        event.preventDefault();
+        updateCardMutation.mutate({
+          cardPublicId: selectedCardInfo.card.publicId,
+          priority: getNextPriority(selectedCardInfo.card.priority),
+        });
+        return;
+      }
+
+      if (key === "e") {
+        event.preventDefault();
+        moveSelectedCardToDone();
+        return;
+      }
+
+      if (
         (event.key === "Delete" || event.key === "Backspace") &&
         canDeleteCard &&
         !selectedCardInfo.card.publicId.startsWith("PLACEHOLDER")
@@ -555,14 +606,17 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     canDeleteCard,
+    canEditCard,
     deleteCardMutation,
     isOpen,
     moveSelectedCardAcrossLists,
+    moveSelectedCardToDone,
     moveSelection,
     openCard,
     openModal,
     openNewCardForm,
     selectedCardInfo,
+    updateCardMutation,
   ]);
 
   useEffect(() => {
@@ -1072,9 +1126,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                             comments={card.comments}
                                             attachments={card.attachments}
                                             dueDate={card.dueDate}
-                                            priority={
-                                              card.priority as CardPriority
-                                            }
+                                            priority={card.priority}
                                             isSelected={
                                               selectedCardPublicId ===
                                               card.publicId

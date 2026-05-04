@@ -19,6 +19,7 @@ export interface WebhookPayload {
       title: string;
       description?: string | null;
       dueDate?: string | null; // ISO string after JSON serialization
+      priority?: "urgent" | "high" | "medium" | "low" | null;
       listId: string;
       boardId: string;
     };
@@ -242,7 +243,7 @@ export function createCardWebhookPayload(
     title: string;
     description?: string | null;
     dueDate?: Date | null;
-    priority?: "urgent" | "high" | "medium" | "low";
+    priority?: "urgent" | "high" | "medium" | "low" | null;
     listId: string;
   },
   context: {

@@ -45,7 +45,7 @@ export const create = async (
     workspaceId: number;
     position: "start" | "end";
     dueDate?: Date | null;
-    priority?: "urgent" | "high" | "medium" | "low";
+    priority?: "urgent" | "high" | "medium" | "low" | null;
   },
 ) => {
   return db.transaction(async (tx) => {
@@ -107,7 +107,7 @@ export const create = async (
         index: index,
         cardNumber,
         dueDate: cardInput.dueDate ?? null,
-        priority: cardInput.priority ?? "medium",
+        priority: cardInput.priority ?? null,
       })
       .returning({
         id: cards.id,
@@ -206,7 +206,7 @@ export const update = async (
     title?: string;
     description?: string;
     dueDate?: Date | null;
-    priority?: "urgent" | "high" | "medium" | "low";
+    priority?: "urgent" | "high" | "medium" | "low" | null;
   },
   args: {
     cardPublicId: string;

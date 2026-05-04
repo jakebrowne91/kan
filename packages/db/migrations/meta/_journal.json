@@ -239,6 +239,13 @@
       "when": 1777919400000,
       "tag": "20260504183000_AddCardPriority",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1777921200000,
+      "tag": "20260504190000_MakeCardPriorityOptional",
+      "breakpoints": true
     }
   ]
 }

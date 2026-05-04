@@ -67,14 +67,14 @@ const Card = ({
   comments: { publicId: string }[];
   attachments?: { publicId: string }[];
   dueDate?: Date | null;
-  priority: CardPriority;
+  priority: CardPriority | null;
   isSelected: boolean;
   canEdit: boolean;
   onSelect: () => void;
   onUpdate: (values: {
     title?: string;
     description?: string;
-    priority?: CardPriority;
+    priority?: CardPriority | null;
   }) => void;
 }) => {
   const { dateLocale } = useLocalisation();
@@ -125,7 +125,7 @@ const Card = ({
       className={twMerge(
         "flex flex-col overflow-hidden rounded-md border border-light-500 bg-light-50 px-3 py-2 text-sm text-neutral-900 shadow-sm transition-colors dark:border-dark-400 dark:bg-dark-200 dark:text-dark-1000 dark:hover:bg-dark-300",
         isSelected &&
-          "border-[var(--retrograde-ring)] bg-white ring-2 ring-[var(--retrograde-ring)] ring-offset-1 ring-offset-[var(--retrograde-background)] dark:border-[var(--retrograde-ring)] dark:bg-dark-300",
+          "border-light-900 bg-light-100 ring-1 ring-inset ring-light-900 dark:border-dark-800 dark:bg-dark-300 dark:ring-dark-800",
       )}
     >
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -136,26 +136,18 @@ const Card = ({
         ) : (
           <span />
         )}
-        <select
-          value={priority}
-          aria-label="Priority"
-          disabled={!canEdit}
-          onClick={(event) => event.stopPropagation()}
-          onMouseDown={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-          onChange={(event) =>
-            onUpdate({ priority: event.target.value as CardPriority })
-          }
-          className={twMerge(
-            "h-6 max-w-[6.5rem] rounded border px-1.5 text-[11px] font-medium capitalize focus:outline-none",
-            priorityStyles[priority],
-          )}
-        >
-          <option value="urgent">Urgent</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
+        {priority ? (
+          <span
+            className={twMerge(
+              "rounded border px-1.5 py-0.5 text-[10px] font-medium capitalize leading-4",
+              priorityStyles[priority],
+            )}
+          >
+            {priority}
+          </span>
+        ) : (
+          <span />
+        )}
       </div>
 
       {isEditingTitle && canEdit ? (
@@ -174,7 +166,7 @@ const Card = ({
               setIsEditingTitle(false);
             }
           }}
-          className="w-full rounded border border-light-600 bg-white px-1 py-0.5 text-sm font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[var(--retrograde-ring)] dark:border-dark-600 dark:bg-dark-100 dark:text-dark-1000"
+          className="w-full rounded border border-light-600 bg-white px-1 py-0.5 text-sm font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-light-700 dark:border-dark-600 dark:bg-dark-100 dark:text-dark-1000 dark:focus:ring-dark-700"
         />
       ) : (
         <button
@@ -209,7 +201,7 @@ const Card = ({
                   setIsEditingDescription(false);
                 }
               }}
-              className="w-full resize-none rounded border border-light-600 bg-white px-2 py-1 text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[var(--retrograde-ring)] dark:border-dark-600 dark:bg-dark-100 dark:text-dark-1000"
+              className="w-full resize-none rounded border border-light-600 bg-white px-2 py-1 text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-light-700 dark:border-dark-600 dark:bg-dark-100 dark:text-dark-1000 dark:focus:ring-dark-700"
             />
           ) : (
             <button

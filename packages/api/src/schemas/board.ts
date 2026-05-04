@@ -6,6 +6,8 @@ import {
   workspaceMemberSchema,
 } from "./common";
 
+const cardPrioritySchema = z.enum(["urgent", "high", "medium", "low"]);
+
 // ─── board.all ───────────────────────────────────────────────
 export const boardListItemSchema = z.object({
   publicId: z.string(),
@@ -40,7 +42,7 @@ const boardDetailCardSchema = z.object({
   description: z.string().nullable(),
   index: z.number(),
   dueDate: z.date().nullable(),
-  priority: z.enum(["urgent", "high", "medium", "low"]),
+  priority: cardPrioritySchema.nullable(),
   cardNumber: z.number().nullable(),
   labels: z.array(labelSchema),
   members: z.array(boardCardMemberSchema),
@@ -86,7 +88,7 @@ const boardSlugCardSchema = z.object({
   description: z.string().nullable(),
   index: z.number(),
   dueDate: z.date().nullable(),
-  priority: z.enum(["urgent", "high", "medium", "low"]),
+  priority: cardPrioritySchema.nullable(),
   cardNumber: z.number().nullable(),
   labels: z.array(labelSchema),
   attachments: z.array(z.object({ publicId: z.string() })),

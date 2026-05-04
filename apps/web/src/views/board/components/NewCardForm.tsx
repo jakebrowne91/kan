@@ -28,12 +28,11 @@ import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
 import { formatMemberDisplayName, getAvatarUrl } from "~/utils/helpers";
 
-type NewCardFormInput = NewCardInput & {
+type NewCardFormInput = Omit<NewCardInput, "priority"> & {
   isCreateAnotherEnabled: boolean;
   dueDate?: Date | null;
+  priority?: NewCardInput["priority"] | null;
 };
-
-const priorityOptions = ["urgent", "high", "medium", "low"] as const;
 
 interface QueryParams {
   boardPublicId: string;
@@ -73,7 +72,7 @@ export function NewCardForm({
       isCreateAnotherEnabled: false,
       position: "start",
       dueDate: null,
-      priority: "medium",
+      priority: null,
     },
     resetOnClose: true,
   });
@@ -90,7 +89,6 @@ export function NewCardForm({
   const title = watch("title");
   const description = watch("description");
   const dueDate = watch("dueDate");
-  const priority = watch("priority");
   const [isDateSelectorOpen, setIsDateSelectorOpen] = useState(false);
 
   // saving form state whenever form values change
@@ -150,7 +148,7 @@ export function NewCardForm({
               listId: 2,
               description: "",
               dueDate: args.dueDate ?? null,
-              priority: args.priority ?? "medium",
+              priority: args.priority ?? null,
               cardNumber: null,
               comments: [],
               checklists: [],
@@ -211,7 +209,7 @@ export function NewCardForm({
           isCreateAnotherEnabled,
           position,
           dueDate: null,
-          priority,
+          priority: null,
         };
         reset(newFormState);
         saveFormState(newFormState);
@@ -270,7 +268,7 @@ export function NewCardForm({
       memberPublicIds: data.memberPublicIds,
       position: data.position,
       dueDate: data.dueDate ?? null,
-      priority: data.priority,
+      priority: data.priority ?? null,
     });
   };
 
@@ -512,17 +510,6 @@ export function NewCardForm({
               </>
             )}
           </div>
-          <select
-            value={priority}
-            {...register("priority")}
-            className="flex h-auto items-center rounded-[5px] border-[1px] border-light-600 bg-light-200 px-2 py-1 text-left text-xs capitalize text-light-800 hover:bg-light-300 focus-visible:outline-none dark:border-dark-600 dark:bg-dark-400 dark:text-dark-1000 dark:hover:bg-dark-500"
-          >
-            {priorityOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
           <button
             onClick={(e) => {
               e.preventDefault();

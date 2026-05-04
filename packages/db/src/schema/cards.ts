@@ -86,7 +86,7 @@ export const cards = pgTable(
       () => imports.id,
     ),
     dueDate: timestamp("dueDate"),
-    priority: cardPriorityEnum("priority").default("medium").notNull(),
+    priority: cardPriorityEnum("priority"),
   },
   (table) => [index("card_list_number_idx").on(table.listId, table.cardNumber)],
 ).enableRLS();

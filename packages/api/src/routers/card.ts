@@ -32,6 +32,7 @@ import {
 } from "../utils/webhook";
 
 const cardPrioritySchema = z.enum(["urgent", "high", "medium", "low"]);
+const nullableCardPrioritySchema = cardPrioritySchema.nullable();
 
 export const cardRouter = createTRPCRouter({
   create: protectedProcedure
@@ -54,7 +55,7 @@ export const cardRouter = createTRPCRouter({
         memberPublicIds: z.array(z.string().min(12)),
         position: z.enum(["start", "end"]),
         dueDate: z.date().nullable().optional(),
-        priority: cardPrioritySchema.optional(),
+        priority: nullableCardPrioritySchema.optional(),
       }),
     )
     .output(cardCreateResponseSchema)
@@ -88,7 +89,7 @@ export const cardRouter = createTRPCRouter({
         workspaceId: list.workspaceId,
         position: input.position,
         dueDate: input.dueDate ?? null,
-        priority: input.priority ?? "medium",
+        priority: input.priority ?? null,
       });
 
       const newCardId = newCard.id;
@@ -198,7 +199,7 @@ export const cardRouter = createTRPCRouter({
             title: input.title,
             description: input.description,
             dueDate: input.dueDate ?? null,
-            priority: input.priority ?? "medium",
+            priority: input.priority ?? null,
             listId: list.publicId,
           },
           {
@@ -866,7 +867,7 @@ export const cardRouter = createTRPCRouter({
         index: z.number().optional(),
         listPublicId: z.string().min(12).optional(),
         dueDate: z.date().nullable().optional(),
-        priority: cardPrioritySchema.optional(),
+        priority: nullableCardPrioritySchema.optional(),
       }),
     )
     .output(cardUpdateResponseSchema)
@@ -940,7 +941,7 @@ export const cardRouter = createTRPCRouter({
             description: string | null;
             publicId: string;
             dueDate: Date | null;
-            priority: "urgent" | "high" | "medium" | "low";
+            priority: "urgent" | "high" | "medium" | "low" | null;
           }
         | undefined;
 
