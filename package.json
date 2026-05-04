@@ -21,6 +21,9 @@
     "lint:fix": "turbo run lint --continue -- --fix --cache --cache-location .cache/.eslintcache",
     "lint:ws": "pnpm dlx sherif@latest",
     "postinstall": "pnpm lint:ws",
+    "railway:build": "pnpm --filter @kan/web build:railway",
+    "railway:migrate": "pnpm --filter @kan/db migrate:railway",
+    "railway:start": "pnpm --filter @kan/web start:railway",
     "typecheck": "turbo run typecheck",
     "ui-add": "turbo run ui-add"
   },

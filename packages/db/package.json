@@ -37,6 +37,7 @@
     "format": "prettier --check . --ignore-path ../../.gitignore",
     "lint": "eslint",
     "migrate": "pnpm with-env drizzle-kit migrate",
+    "migrate:railway": "drizzle-kit migrate",
     "push": "pnpm with-env drizzle-kit push",
     "studio": "pnpm with-env drizzle-kit studio",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false",
