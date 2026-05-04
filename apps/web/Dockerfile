@@ -12,7 +12,7 @@ RUN apk update && \
     rm -rf /var/cache/apk/* /tmp/* || true && \
     corepack enable && \
     npm install turbo@2.3.1 --global && \
-    pnpm config set store-dir ~/.pnpm-store
+    pnpm config set store-dir /root/.pnpm-store
 
 # ============================================
 # Stage 2: Prune the monorepo
@@ -46,7 +46,7 @@ COPY --from=pruner /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=pruner /app/out/json/ .
 
 ENV CI=true
-RUN --mount=type=cache,id=pnpm,target=~/.pnpm-store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=s/876f847d-e165-4f65-bcc3-7f9c37da6172-/root/.pnpm-store,target=/root/.pnpm-store pnpm install --frozen-lockfile
 
 # ============================================
 # Stage 4: Build the web application
