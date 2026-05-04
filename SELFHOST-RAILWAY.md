@@ -34,8 +34,8 @@ openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
 `railway.json` tells Railway to:
 
 - Build with Railpack using `pnpm railway:build`.
-- Run migrations before each deploy with `pnpm railway:migrate`.
 - Start the app with `pnpm railway:start`.
+- Run migrations as part of startup before launching Next.js.
 
 ## After Adding a Custom Domain
 

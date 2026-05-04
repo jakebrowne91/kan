@@ -15,7 +15,6 @@
     ]
   },
   "deploy": {
-    "preDeployCommand": ["pnpm railway:migrate"],
     "startCommand": "pnpm railway:start",
     "healthcheckPath": "/",
     "healthcheckTimeout": 300,
