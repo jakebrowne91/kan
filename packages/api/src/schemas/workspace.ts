@@ -1,10 +1,8 @@
 import { z } from "zod";
 
-import { userSchema } from "./common";
-
 // ─── workspace.all ───────────────────────────────────────────
 export const workspaceListItemSchema = z.object({
-  role: z.string(),
+  role: z.enum(["admin", "member", "guest"]),
   workspace: z.object({
     publicId: z.string(),
     name: z.string(),
@@ -12,6 +10,7 @@ export const workspaceListItemSchema = z.object({
     slug: z.string(),
     plan: z.enum(["free", "team", "pro", "enterprise"]),
     weekStartDay: z.number().nullable(),
+    cardPrefix: z.string(),
     deletedAt: z.date().nullable(),
   }),
 });
@@ -74,6 +73,7 @@ export const workspaceCreateResponseSchema = z.object({
   slug: z.string(),
   description: z.string().nullable(),
   plan: z.enum(["free", "team", "pro", "enterprise"]),
+  cardPrefix: z.string(),
 });
 
 // ─── workspace.update ────────────────────────────────────────

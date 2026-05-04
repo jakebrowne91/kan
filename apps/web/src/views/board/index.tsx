@@ -1,11 +1,10 @@
 import type { DropResult } from "react-beautiful-dnd";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/router";
 import { t } from "@lingui/core/macro";
 import { keepPreviousData } from "@tanstack/react-query";
 import { env } from "next-runtime-env";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DragDropContext, Draggable } from "react-beautiful-dnd";
 import { useForm } from "react-hook-form";
 import {
@@ -16,6 +15,7 @@ import {
 
 import type { UpdateBoardInput } from "@kan/api/types";
 
+import type { CardPriority } from "./components/Card";
 import type { CardContextMenuAction } from "./components/CardContextMenu";
 import Button from "~/components/Button";
 import { DeleteLabelConfirmation } from "~/components/DeleteLabelConfirmation";
@@ -58,6 +58,15 @@ import VisibilityButton from "./components/VisibilityButton";
 
 type PublicListId = string;
 
+const isEditableTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(
+    target.closest(
+      'input, textarea, select, button, a, [contenteditable="true"], [role="dialog"]',
+    ),
+  );
+};
+
 export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   const params = useParams() as { boardId: string | string[] } | null;
   const router = useRouter();
@@ -68,6 +77,9 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     useModal();
   const [selectedPublicListId, setSelectedPublicListId] =
     useState<PublicListId>("");
+  const [selectedCardPublicId, setSelectedCardPublicId] = useState<
+    string | null
+  >(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const [contextMenu, setContextMenu] = useState<{
@@ -81,17 +93,14 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     direction: "horizontal",
   });
 
-  const { canCreateList, canEditList, canEditCard, canEditBoard } =
-    usePermissions();
-
-  const { tooltipContent: createListShortcutTooltipContent } =
-    useKeyboardShortcut({
-      type: "PRESS",
-      stroke: { key: "C" },
-      action: () => boardId && canCreateList && openNewListForm(boardId),
-      description: t`Create new list`,
-      group: "ACTIONS",
-    });
+  const {
+    canCreateCard,
+    canDeleteCard,
+    canCreateList,
+    canEditList,
+    canEditCard,
+    canEditBoard,
+  } = usePermissions();
 
   const boardId = params?.boardId
     ? Array.isArray(params.boardId)
@@ -154,7 +163,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         error?.data?.code === "NOT_FOUND" ||
         (!boardData && !isQueryLoading)
       ) {
-        router.replace("/404");
+        void router.replace("/404");
       }
     }
   }, [router, boardId, isQueryLoading, error, boardData]);
@@ -233,36 +242,70 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       utils.board.byId.setData(queryParams, (oldBoard) => {
         if (!oldBoard) return oldBoard;
 
-        const updatedLists = Array.from(oldBoard.lists);
-
-        const sourceList = updatedLists.find((list) =>
+        const sourceList = oldBoard.lists.find((list) =>
           list.cards.some((card) => card.publicId === args.cardPublicId),
         );
-        const destinationList = updatedLists.find(
-          (list) => list.publicId === args.listPublicId,
-        );
-
-        const cardToMove = sourceList?.cards.find(
+        const sourceCard = sourceList?.cards.find(
           (card) => card.publicId === args.cardPublicId,
         );
 
-        if (!cardToMove) return oldBoard;
+        if (!sourceList || !sourceCard) return oldBoard;
 
-        const removedCard = sourceList?.cards.splice(cardToMove.index, 1)[0];
+        const updatedCard = {
+          ...sourceCard,
+          ...(args.title !== undefined ? { title: args.title } : {}),
+          ...(args.description !== undefined
+            ? { description: args.description }
+            : {}),
+          ...(args.dueDate !== undefined ? { dueDate: args.dueDate } : {}),
+          ...(args.priority !== undefined ? { priority: args.priority } : {}),
+        };
 
-        if (
-          sourceList &&
-          destinationList &&
-          removedCard &&
-          args.index !== undefined
-        ) {
-          destinationList.cards.splice(args.index, 0, removedCard);
+        const shouldMove =
+          args.listPublicId !== undefined && args.index !== undefined;
 
+        if (!shouldMove) {
           return {
             ...oldBoard,
-            lists: updatedLists,
+            lists: oldBoard.lists.map((list) => {
+              if (list.publicId !== sourceList.publicId) return list;
+
+              return {
+                ...list,
+                cards: list.cards.map((card) =>
+                  card.publicId === args.cardPublicId ? updatedCard : card,
+                ),
+              };
+            }),
           };
         }
+
+        const destinationList = oldBoard.lists.find(
+          (list) => list.publicId === args.listPublicId,
+        );
+
+        if (!destinationList) return oldBoard;
+
+        return {
+          ...oldBoard,
+          lists: oldBoard.lists.map((list) => {
+            const withoutCard = list.cards.filter(
+              (card) => card.publicId !== args.cardPublicId,
+            );
+
+            if (list.publicId !== destinationList.publicId) {
+              return { ...list, cards: withoutCard };
+            }
+
+            const nextCards = [...withoutCard];
+            nextCards.splice(args.index ?? nextCards.length, 0, {
+              ...updatedCard,
+              index: args.index ?? updatedCard.index,
+            });
+
+            return { ...list, cards: nextCards };
+          }),
+        };
       });
 
       return { previousState: currentState };
@@ -280,8 +323,250 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     },
   });
 
+  const deleteCardMutation = api.card.delete.useMutation({
+    onMutate: async (args) => {
+      await utils.board.byId.cancel();
+
+      const currentState = utils.board.byId.getData(queryParams);
+
+      utils.board.byId.setData(queryParams, (oldBoard) => {
+        if (!oldBoard) return oldBoard;
+
+        return {
+          ...oldBoard,
+          lists: oldBoard.lists.map((list) => ({
+            ...list,
+            cards: list.cards.filter(
+              (card) => card.publicId !== args.cardPublicId,
+            ),
+          })),
+        };
+      });
+
+      return { previousState: currentState };
+    },
+    onError: (_error, _newList, context) => {
+      utils.board.byId.setData(queryParams, context?.previousState);
+      showPopup({
+        header: t`Unable to delete card`,
+        message: t`Please try again later, or contact customer support.`,
+        icon: "error",
+      });
+    },
+    onSettled: async () => {
+      setSelectedCardPublicId(null);
+      await utils.board.byId.invalidate(queryParams);
+    },
+  });
+
+  const boardCards = useMemo(
+    () =>
+      boardData?.lists.flatMap((list, listIndex) =>
+        list.cards.map((card, cardIndex) => ({
+          card,
+          list,
+          listIndex,
+          cardIndex,
+        })),
+      ) ?? [],
+    [boardData],
+  );
+
+  const selectedCardInfo =
+    boardCards.find(({ card }) => card.publicId === selectedCardPublicId) ??
+    null;
+
+  const openNewCardForm = useCallback(
+    (preferredListPublicId?: string) => {
+      if (!canCreateCard) return;
+
+      const listPublicId =
+        preferredListPublicId ??
+        selectedCardInfo?.list.publicId ??
+        (selectedPublicListId || boardData?.lists[0]?.publicId);
+
+      if (!listPublicId) return;
+      setSelectedPublicListId(listPublicId);
+      openModal("NEW_CARD");
+    },
+    [
+      boardData?.lists,
+      canCreateCard,
+      openModal,
+      selectedCardInfo?.list.publicId,
+      selectedPublicListId,
+    ],
+  );
+
+  useKeyboardShortcut({
+    type: "PRESS",
+    stroke: { key: "C" },
+    action: () => openNewCardForm(),
+    description: t`New card`,
+    group: "ACTIONS",
+  });
+
   useEffect(() => {
-    if (isSuccess && boardData) {
+    if (
+      selectedCardPublicId &&
+      !boardCards.some(({ card }) => card.publicId === selectedCardPublicId)
+    ) {
+      setSelectedCardPublicId(null);
+    }
+  }, [boardCards, selectedCardPublicId]);
+
+  const openCard = useCallback(
+    (cardPublicId: string) => {
+      if (cardPublicId.startsWith("PLACEHOLDER")) return;
+      void router.push(
+        isTemplate
+          ? `/templates/${boardId}/cards/${cardPublicId}`
+          : `/cards/${cardPublicId}`,
+      );
+    },
+    [boardId, isTemplate, router],
+  );
+
+  const moveSelectedCardAcrossLists = useCallback(
+    (direction: -1 | 1) => {
+      if (!canEditCard || !selectedCardInfo) return;
+
+      const targetList =
+        boardData?.lists[selectedCardInfo.listIndex + direction];
+      if (!targetList) return;
+
+      updateCardMutation.mutate({
+        cardPublicId: selectedCardInfo.card.publicId,
+        listPublicId: targetList.publicId,
+        index: Math.min(selectedCardInfo.cardIndex, targetList.cards.length),
+      });
+      setSelectedPublicListId(targetList.publicId);
+    },
+    [boardData?.lists, canEditCard, selectedCardInfo, updateCardMutation],
+  );
+
+  const moveSelection = useCallback(
+    (direction: "up" | "down" | "left" | "right") => {
+      if (!boardData?.lists.length) return;
+
+      if (!selectedCardInfo) {
+        const firstCard = boardCards[0]?.card;
+        if (firstCard) setSelectedCardPublicId(firstCard.publicId);
+        return;
+      }
+
+      let nextCard = selectedCardInfo.card;
+
+      if (direction === "up") {
+        nextCard =
+          selectedCardInfo.list.cards[selectedCardInfo.cardIndex - 1] ??
+          selectedCardInfo.card;
+      }
+
+      if (direction === "down") {
+        nextCard =
+          selectedCardInfo.list.cards[selectedCardInfo.cardIndex + 1] ??
+          selectedCardInfo.card;
+      }
+
+      if (direction === "left" || direction === "right") {
+        const listOffset = direction === "left" ? -1 : 1;
+        const nextList =
+          boardData.lists[selectedCardInfo.listIndex + listOffset];
+        nextCard =
+          nextList?.cards[
+            Math.min(selectedCardInfo.cardIndex, nextList.cards.length - 1)
+          ] ?? selectedCardInfo.card;
+      }
+
+      setSelectedCardPublicId(nextCard.publicId);
+      setSelectedPublicListId(
+        boardCards.find(({ card }) => card.publicId === nextCard.publicId)?.list
+          .publicId ?? selectedCardInfo.list.publicId,
+      );
+    },
+    [boardCards, boardData, selectedCardInfo],
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isOpen || isEditableTarget(event.target)) return;
+
+      const key = event.key.toLowerCase();
+
+      if (key === "c") {
+        event.preventDefault();
+        openNewCardForm();
+        return;
+      }
+
+      if (
+        event.key === "ArrowUp" ||
+        event.key === "ArrowDown" ||
+        event.key === "ArrowLeft" ||
+        event.key === "ArrowRight"
+      ) {
+        event.preventDefault();
+        moveSelection(
+          event.key === "ArrowUp"
+            ? "up"
+            : event.key === "ArrowDown"
+              ? "down"
+              : event.key === "ArrowLeft"
+                ? "left"
+                : "right",
+        );
+        return;
+      }
+
+      if (!selectedCardInfo) return;
+
+      if (event.key === "Tab") {
+        event.preventDefault();
+        moveSelectedCardAcrossLists(event.shiftKey ? -1 : 1);
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        openCard(selectedCardInfo.card.publicId);
+        return;
+      }
+
+      if (key === "l") {
+        event.preventDefault();
+        openModal("CARD_CONTEXT_LABELS", selectedCardInfo.card.publicId);
+        return;
+      }
+
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        canDeleteCard &&
+        !selectedCardInfo.card.publicId.startsWith("PLACEHOLDER")
+      ) {
+        event.preventDefault();
+        deleteCardMutation.mutate({
+          cardPublicId: selectedCardInfo.card.publicId,
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    canDeleteCard,
+    deleteCardMutation,
+    isOpen,
+    moveSelectedCardAcrossLists,
+    moveSelection,
+    openCard,
+    openModal,
+    openNewCardForm,
+    selectedCardInfo,
+  ]);
+
+  useEffect(() => {
+    if (boardData) {
       setValue("name", boardData.name || "");
     }
   }, [isSuccess, boardData, setValue]);
@@ -465,7 +750,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
           isVisible={isOpen && modalContentType === "CREATE_TEMPLATE"}
         >
           <NewTemplateForm
-            workspacePublicId={workspace.publicId ?? ""}
+            workspacePublicId={workspace.publicId}
             sourceBoardPublicId={boardId ?? ""}
             sourceBoardName={boardData?.name ?? ""}
           />
@@ -600,9 +885,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
             )}
             <Tooltip
               content={
-                !canCreateList
-                  ? t`You don't have permission`
-                  : createListShortcutTooltipContent
+                !canCreateList ? t`You don't have permission` : undefined
               }
             >
               <Button
@@ -689,8 +972,9 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                         {boardData.lists.map((list, index) => (
                           <List
                             index={index}
-                            key={index}
+                            key={list.publicId}
                             list={list}
+                            cardCount={list.cards.length}
                             setSelectedPublicListId={(publicListId) =>
                               setSelectedPublicListId(publicListId)
                             }
@@ -713,14 +997,36 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                       isDragDisabled={!canEditCard}
                                     >
                                       {(provided) => (
-                                        <Link
+                                        <div
+                                          role="link"
+                                          tabIndex={
+                                            card.publicId.startsWith(
+                                              "PLACEHOLDER",
+                                            )
+                                              ? -1
+                                              : 0
+                                          }
                                           onClick={(e) => {
                                             if (
                                               card.publicId.startsWith(
                                                 "PLACEHOLDER",
                                               )
                                             )
-                                              e.preventDefault();
+                                              return;
+                                            if (
+                                              canEditCard &&
+                                              isEditableTarget(e.target)
+                                            )
+                                              return;
+                                            openCard(card.publicId);
+                                          }}
+                                          onFocus={() => {
+                                            setSelectedCardPublicId(
+                                              card.publicId,
+                                            );
+                                            setSelectedPublicListId(
+                                              list.publicId,
+                                            );
                                           }}
                                           onContextMenu={(e) => {
                                             if (
@@ -739,11 +1045,6 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                             });
                                           }}
                                           key={card.publicId}
-                                          href={
-                                            isTemplate
-                                              ? `/templates/${boardId}/cards/${card.publicId}`
-                                              : `/cards/${card.publicId}`
-                                          }
                                           className={`mb-2 flex !cursor-pointer flex-col ${
                                             card.publicId.startsWith(
                                               "PLACEHOLDER",
@@ -764,15 +1065,38 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                             }
                                             labels={card.labels}
                                             members={card.members}
-                                            checklists={card.checklists ?? []}
+                                            checklists={card.checklists}
                                             description={
                                               card.description ?? null
                                             }
-                                            comments={card.comments ?? []}
+                                            comments={card.comments}
                                             attachments={card.attachments}
-                                            dueDate={card.dueDate ?? null}
+                                            dueDate={card.dueDate}
+                                            priority={
+                                              card.priority as CardPriority
+                                            }
+                                            isSelected={
+                                              selectedCardPublicId ===
+                                              card.publicId
+                                            }
+                                            canEdit={canEditCard}
+                                            onSelect={() => {
+                                              setSelectedCardPublicId(
+                                                card.publicId,
+                                              );
+                                              setSelectedPublicListId(
+                                                list.publicId,
+                                              );
+                                            }}
+                                            onUpdate={(values) => {
+                                              if (!canEditCard) return;
+                                              updateCardMutation.mutate({
+                                                cardPublicId: card.publicId,
+                                                ...values,
+                                              });
+                                            }}
                                           />
-                                        </Link>
+                                        </div>
                                       )}
                                     </Draggable>
                                   ))}

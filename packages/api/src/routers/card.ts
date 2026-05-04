@@ -8,24 +8,30 @@ import * as checklistRepo from "@kan/db/repository/checklist.repo";
 import * as labelRepo from "@kan/db/repository/label.repo";
 import * as listRepo from "@kan/db/repository/list.repo";
 import * as workspaceRepo from "@kan/db/repository/workspace.repo";
+import { generateAttachmentUrl, generateAvatarUrl } from "@kan/shared/utils";
 
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import {
-  cardCreateResponseSchema,
-  cardUpdateResponseSchema,
-  cardDetailSchema,
-  commentResponseSchema,
-  commentDeleteResponseSchema,
   activityItemSchema,
+  cardCreateResponseSchema,
+  cardDetailSchema,
+  cardUpdateResponseSchema,
+  commentDeleteResponseSchema,
+  commentResponseSchema,
 } from "../schemas";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { mergeActivities } from "../utils/activities";
 import { sendMentionEmails } from "../utils/notifications";
-import { assertCanDelete, assertCanEdit, assertPermission } from "../utils/permissions";
-import { generateAttachmentUrl, generateAvatarUrl } from "@kan/shared/utils";
+import {
+  assertCanDelete,
+  assertCanEdit,
+  assertPermission,
+} from "../utils/permissions";
 import {
   createCardWebhookPayload,
   sendWebhooksForWorkspace,
 } from "../utils/webhook";
+
+const cardPrioritySchema = z.enum(["urgent", "high", "medium", "low"]);
 
 export const cardRouter = createTRPCRouter({
   create: protectedProcedure
@@ -48,6 +54,7 @@ export const cardRouter = createTRPCRouter({
         memberPublicIds: z.array(z.string().min(12)),
         position: z.enum(["start", "end"]),
         dueDate: z.date().nullable().optional(),
+        priority: cardPrioritySchema.optional(),
       }),
     )
     .output(cardCreateResponseSchema)
@@ -81,6 +88,7 @@ export const cardRouter = createTRPCRouter({
         workspaceId: list.workspaceId,
         position: input.position,
         dueDate: input.dueDate ?? null,
+        priority: input.priority ?? "medium",
       });
 
       const newCardId = newCard.id;
@@ -190,6 +198,7 @@ export const cardRouter = createTRPCRouter({
             title: input.title,
             description: input.description,
             dueDate: input.dueDate ?? null,
+            priority: input.priority ?? "medium",
             listId: list.publicId,
           },
           {
@@ -245,7 +254,12 @@ export const cardRouter = createTRPCRouter({
           code: "NOT_FOUND",
         });
 
-      await assertPermission(ctx.db, userId, card.workspaceId, "comment:create");
+      await assertPermission(
+        ctx.db,
+        userId,
+        card.workspaceId,
+        "comment:create",
+      );
 
       const newComment = await cardCommentRepo.create(ctx.db, {
         comment: input.comment,
@@ -852,6 +866,7 @@ export const cardRouter = createTRPCRouter({
         index: z.number().optional(),
         listPublicId: z.string().min(12).optional(),
         dueDate: z.date().nullable().optional(),
+        priority: cardPrioritySchema.optional(),
       }),
     )
     .output(cardUpdateResponseSchema)
@@ -900,10 +915,7 @@ export const cardRouter = createTRPCRouter({
         | undefined;
 
       if (input.listPublicId) {
-        newList = await listRepo.getByPublicId(
-          ctx.db,
-          input.listPublicId,
-        );
+        newList = await listRepo.getByPublicId(ctx.db, input.listPublicId);
 
         if (!newList)
           throw new TRPCError({
@@ -928,18 +940,27 @@ export const cardRouter = createTRPCRouter({
             description: string | null;
             publicId: string;
             dueDate: Date | null;
+            priority: "urgent" | "high" | "medium" | "low";
           }
         | undefined;
 
       const previousDueDate = existingCard.dueDate;
 
-      if (input.title || input.description || input.dueDate !== undefined) {
+      if (
+        input.title !== undefined ||
+        input.description !== undefined ||
+        input.dueDate !== undefined ||
+        input.priority !== undefined
+      ) {
         result = await cardRepo.update(
           ctx.db,
           {
-            ...(input.title && { title: input.title }),
-            ...(input.description && { description: input.description }),
+            ...(input.title !== undefined && { title: input.title }),
+            ...(input.description !== undefined && {
+              description: input.description,
+            }),
             ...(input.dueDate !== undefined && { dueDate: input.dueDate }),
+            ...(input.priority !== undefined && { priority: input.priority }),
           },
           { cardPublicId: input.cardPublicId },
         );
@@ -971,7 +992,10 @@ export const cardRouter = createTRPCRouter({
         });
       }
 
-      if (input.description && existingCard.description !== input.description) {
+      if (
+        input.description !== undefined &&
+        existingCard.description !== input.description
+      ) {
         activities.push({
           type: "card.updated.description" as const,
           cardId: result.id,
@@ -1035,10 +1059,22 @@ export const cardRouter = createTRPCRouter({
       if (input.title && existingCard.title !== input.title) {
         webhookChanges.title = { from: existingCard.title, to: input.title };
       }
-      if (input.description && existingCard.description !== input.description) {
+      if (
+        input.description !== undefined &&
+        existingCard.description !== input.description
+      ) {
         webhookChanges.description = {
           from: existingCard.description,
           to: input.description,
+        };
+      }
+      if (
+        input.priority !== undefined &&
+        existingCard.priority !== input.priority
+      ) {
+        webhookChanges.priority = {
+          from: existingCard.priority,
+          to: input.priority,
         };
       }
       if (
@@ -1047,18 +1083,20 @@ export const cardRouter = createTRPCRouter({
       ) {
         webhookChanges.dueDate = { from: previousDueDate, to: input.dueDate };
       }
-      const movedToNewList = Boolean(newListId && existingCard.listId !== newListId);
+      const movedToNewList = Boolean(
+        newListId && existingCard.listId !== newListId,
+      );
       const currentWebhookListPublicId = movedToNewList
-        ? input.listPublicId!
+        ? (input.listPublicId ?? existingCard.list.publicId)
         : existingCard.list.publicId;
       const currentWebhookListName = movedToNewList
-        ? newList?.name ?? card.listName
+        ? (newList?.name ?? card.listName)
         : existingCard.list.name;
 
       if (movedToNewList) {
         webhookChanges.listId = {
           from: existingCard.list.publicId,
-          to: input.listPublicId!,
+          to: input.listPublicId ?? existingCard.list.publicId,
         };
       }
 
@@ -1073,6 +1111,7 @@ export const cardRouter = createTRPCRouter({
             title: result.title,
             description: result.description,
             dueDate: result.dueDate,
+            priority: result.priority,
             listId: currentWebhookListPublicId,
           },
           {
@@ -1168,6 +1207,7 @@ export const cardRouter = createTRPCRouter({
               title: fullCard.title,
               description: fullCard.description,
               dueDate: fullCard.dueDate,
+              priority: fullCard.priority,
               listId: fullCard.list.publicId,
             },
             {
@@ -1276,6 +1316,7 @@ export const cardRouter = createTRPCRouter({
         workspaceId: targetList.workspaceId,
         position: "end",
         dueDate: sourceCard.dueDate ?? null,
+        priority: sourceCard.priority,
       });
 
       if (input.index !== undefined && input.index >= 0) {
@@ -1288,7 +1329,10 @@ export const cardRouter = createTRPCRouter({
 
       if (input.copyLabels && sourceCard.labels?.length) {
         const labelPublicIds = sourceCard.labels.map((l) => l.publicId);
-        const labels = await labelRepo.getAllByPublicIds(ctx.db, labelPublicIds);
+        const labels = await labelRepo.getAllByPublicIds(
+          ctx.db,
+          labelPublicIds,
+        );
         if (labels.length) {
           const labelsInsert = labels.map((label) => ({
             cardId: newCard.id,

@@ -6,6 +6,29 @@ html {
   font-size: 14px;
 }
 
+:root {
+  --retrograde-background: oklch(0.895 0 0);
+  --retrograde-foreground: oklch(0.41 0 0);
+  --retrograde-card: oklch(0.91 0 0);
+  --retrograde-muted: oklch(0.835 0 0);
+  --retrograde-border: oklch(0.8 0 0);
+  --retrograde-ring: oklch(0.55 0.05 195);
+}
+
+.dark {
+  --retrograde-background: oklch(0.4 0 0);
+  --retrograde-foreground: oklch(0.85 0 0);
+  --retrograde-card: oklch(0.435 0 0);
+  --retrograde-muted: oklch(0.5 0 0);
+  --retrograde-border: oklch(0.47 0 0);
+  --retrograde-ring: oklch(0.69 0.07 195);
+}
+
+body {
+  background: var(--retrograde-background);
+  color: var(--retrograde-foreground);
+}
+
 [contenteditable="true"]:empty:before {
   content: attr(placeholder);
   display: block;

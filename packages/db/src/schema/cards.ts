@@ -54,6 +54,12 @@ export const activityTypes = [
 export type ActivityType = (typeof activityTypes)[number];
 
 export const activityTypeEnum = pgEnum("card_activity_type", activityTypes);
+export const cardPriorityEnum = pgEnum("card_priority", [
+  "urgent",
+  "high",
+  "medium",
+  "low",
+]);
 
 export const cards = pgTable(
   "card",
@@ -80,10 +86,9 @@ export const cards = pgTable(
       () => imports.id,
     ),
     dueDate: timestamp("dueDate"),
+    priority: cardPriorityEnum("priority").default("medium").notNull(),
   },
-  (table) => [
-    index("card_list_number_idx").on(table.listId, table.cardNumber),
-  ],
+  (table) => [index("card_list_number_idx").on(table.listId, table.cardNumber)],
 ).enableRLS();
 
 export const cardsRelations = relations(cards, ({ one, many }) => ({

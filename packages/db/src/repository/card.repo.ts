@@ -45,6 +45,7 @@ export const create = async (
     workspaceId: number;
     position: "start" | "end";
     dueDate?: Date | null;
+    priority?: "urgent" | "high" | "medium" | "low";
   },
 ) => {
   return db.transaction(async (tx) => {
@@ -106,8 +107,14 @@ export const create = async (
         index: index,
         cardNumber,
         dueDate: cardInput.dueDate ?? null,
+        priority: cardInput.priority ?? "medium",
       })
-      .returning({ id: cards.id, listId: cards.listId, publicId: cards.publicId, cardNumber: cards.cardNumber });
+      .returning({
+        id: cards.id,
+        listId: cards.listId,
+        publicId: cards.publicId,
+        cardNumber: cards.cardNumber,
+      });
 
     if (!result[0]) throw new Error("Unable to create card");
 
@@ -199,6 +206,7 @@ export const update = async (
     title?: string;
     description?: string;
     dueDate?: Date | null;
+    priority?: "urgent" | "high" | "medium" | "low";
   },
   args: {
     cardPublicId: string;
@@ -210,6 +218,7 @@ export const update = async (
       title: cardInput.title,
       description: cardInput.description,
       dueDate: cardInput.dueDate !== undefined ? cardInput.dueDate : undefined,
+      priority: cardInput.priority,
       updatedAt: new Date(),
     })
     .where(and(eq(cards.publicId, args.cardPublicId), isNull(cards.deletedAt)))
@@ -219,6 +228,7 @@ export const update = async (
       title: cards.title,
       description: cards.description,
       dueDate: cards.dueDate,
+      priority: cards.priority,
     });
 
   return result;
@@ -254,6 +264,7 @@ export const getByPublicId = (db: dbClient, cardPublicId: string) => {
       description: true,
       listId: true,
       dueDate: true,
+      priority: true,
     },
     with: {
       list: {
@@ -321,8 +332,7 @@ export const bulkCreate = async (
         .where(eq(workspaces.id, workspaceId))
         .returning({ cardCounter: workspaces.cardCounter });
 
-      if (!counterResult)
-        throw new Error(`Workspace ${workspaceId} not found`);
+      if (!counterResult) throw new Error(`Workspace ${workspaceId} not found`);
 
       const last = counterResult.cardCounter;
       const start = last - count + 1;
@@ -484,6 +494,7 @@ export const getWithListAndMembersByPublicId = async (
       title: true,
       description: true,
       dueDate: true,
+      priority: true,
       createdBy: true,
       cardNumber: true,
     },
@@ -874,6 +885,7 @@ export const reorder = async (
         title: true,
         description: true,
         dueDate: true,
+        priority: true,
       },
       where: eq(cards.id, card.id),
     });

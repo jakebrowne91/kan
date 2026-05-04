@@ -21,6 +21,7 @@ interface ListProps {
   children: ReactNode;
   index: number;
   list: List;
+  cardCount: number;
   setSelectedPublicListId: (publicListId: PublicListId) => void;
 }
 
@@ -41,6 +42,7 @@ export default function List({
   children,
   index,
   list,
+  cardCount,
   setSelectedPublicListId,
 }: ListProps) {
   const { openModal } = useModal();
@@ -100,16 +102,21 @@ export default function List({
           <div className="mb-2 flex justify-between">
             <form
               onSubmit={handleSubmit(onSubmit)}
-              className="w-full focus-visible:outline-none"
+              className="min-w-0 flex-1 focus-visible:outline-none"
             >
-              <input
-                id="name"
-                type="text"
-                {...register("name")}
-                onBlur={handleSubmit(onSubmit)}
-                readOnly={!canEdit}
-                className="w-full border-0 bg-transparent px-4 pt-1 text-sm font-medium text-neutral-900 focus:ring-0 focus-visible:outline-none dark:text-dark-1000"
-              />
+              <div className="flex min-w-0 items-center gap-2 px-4 pt-1">
+                <input
+                  id="name"
+                  type="text"
+                  {...register("name")}
+                  onBlur={handleSubmit(onSubmit)}
+                  readOnly={!canEdit}
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm font-medium text-neutral-900 focus:ring-0 focus-visible:outline-none dark:text-dark-1000"
+                />
+                <span className="inline-flex min-w-5 justify-center rounded-full border border-light-600 bg-light-100 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-light-950 dark:border-dark-500 dark:bg-dark-300 dark:text-dark-950">
+                  {cardCount}
+                </span>
+              </div>
             </form>
             <div className="flex items-center">
               <Tooltip
@@ -118,7 +125,7 @@ export default function List({
                 }
               >
                 <button
-                  className="mx-1 inline-flex h-fit items-center rounded-md p-1 px-1 text-sm font-semibold text-dark-50 hover:bg-light-400 disabled:opacity-60 disabled:cursor-not-allowed dark:hover:bg-dark-200"
+                  className="mx-1 inline-flex h-fit items-center rounded-md p-1 px-1 text-sm font-semibold text-dark-50 hover:bg-light-400 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-dark-200"
                   onClick={() => openNewCardForm(list.publicId)}
                   disabled={!canCreateCard}
                 >

@@ -220,13 +220,24 @@ export default function PublicBoardView() {
                           >
                             <Card
                               title={card.title}
+                              ticketNumber={
+                                card.cardNumber != null &&
+                                data.workspace.cardPrefix
+                                  ? `${data.workspace.cardPrefix}-${card.cardNumber}`
+                                  : null
+                              }
                               labels={card.labels}
-                              checklists={card.checklists ?? []}
+                              checklists={card.checklists}
                               members={[]}
                               description={card.description}
-                              comments={card.comments ?? []}
+                              comments={card.comments}
                               attachments={card.attachments}
-                              dueDate={card.dueDate ?? null}
+                              dueDate={card.dueDate}
+                              priority={card.priority}
+                              isSelected={false}
+                              canEdit={false}
+                              onSelect={() => undefined}
+                              onUpdate={() => undefined}
                             />
                           </Link>
                         );

@@ -33,6 +33,8 @@ type NewCardFormInput = NewCardInput & {
   dueDate?: Date | null;
 };
 
+const priorityOptions = ["urgent", "high", "medium", "low"] as const;
+
 interface QueryParams {
   boardPublicId: string;
   members: string[];
@@ -71,6 +73,7 @@ export function NewCardForm({
       isCreateAnotherEnabled: false,
       position: "start",
       dueDate: null,
+      priority: "medium",
     },
     resetOnClose: true,
   });
@@ -80,13 +83,14 @@ export function NewCardForm({
       values: formState,
     });
 
-  const labelPublicIds = watch("labelPublicIds") || [];
-  const memberPublicIds = watch("memberPublicIds") || [];
+  const labelPublicIds = watch("labelPublicIds");
+  const memberPublicIds = watch("memberPublicIds");
   const isCreateAnotherEnabled = watch("isCreateAnotherEnabled");
   const position = watch("position");
   const title = watch("title");
   const description = watch("description");
   const dueDate = watch("dueDate");
+  const priority = watch("priority");
   const [isDateSelectorOpen, setIsDateSelectorOpen] = useState(false);
 
   // saving form state whenever form values change
@@ -139,13 +143,14 @@ export function NewCardForm({
         if (!oldBoard) return oldBoard;
 
         const updatedLists = oldBoard.lists.map((list) => {
-          if (list.publicId === listPublicId) {
+          if (list.publicId === args.listPublicId) {
             const newCard = {
               publicId: `PLACEHOLDER_${generateUID()}`,
               title: args.title,
               listId: 2,
               description: "",
               dueDate: args.dueDate ?? null,
+              priority: args.priority ?? "medium",
               cardNumber: null,
               comments: [],
               checklists: [],
@@ -153,18 +158,14 @@ export function NewCardForm({
               labels: oldBoard.labels.filter((label) =>
                 args.labelPublicIds.includes(label.publicId),
               ),
-              members:
-                oldBoard.workspace.members
-                  .filter((member) =>
-                    args.memberPublicIds.includes(member.publicId),
-                  )
-                  .map((member) => ({
-                    ...member,
-                    deletedAt: null,
-                  })) ?? [],
-              comments: [],
-              checklists: [],
-              attachments: [],
+              members: oldBoard.workspace.members
+                .filter((member) =>
+                  args.memberPublicIds.includes(member.publicId),
+                )
+                .map((member) => ({
+                  ...member,
+                  deletedAt: null,
+                })),
               _filteredLabels: labelPublicIds.map((id) => ({ publicId: id })),
               _filteredMembers: memberPublicIds.map((id) => ({ publicId: id })),
               index: position === "start" ? 0 : list.cards.length,
@@ -210,6 +211,7 @@ export function NewCardForm({
           isCreateAnotherEnabled,
           position,
           dueDate: null,
+          priority,
         };
         reset(newFormState);
         saveFormState(newFormState);
@@ -268,6 +270,7 @@ export function NewCardForm({
       memberPublicIds: data.memberPublicIds,
       position: data.position,
       dueDate: data.dueDate ?? null,
+      priority: data.priority,
     });
   };
 
@@ -441,7 +444,10 @@ export function NewCardForm({
                         );
 
                         return (
-                          <>
+                          <span
+                            key={labelPublicId}
+                            className="inline-flex items-center"
+                          >
                             <svg
                               fill={label?.colourCode ?? "#3730a3"}
                               className="h-2 w-2"
@@ -453,7 +459,7 @@ export function NewCardForm({
                             {labelPublicIds.length === 1 && (
                               <div className="ml-1">{label?.name}</div>
                             )}
-                          </>
+                          </span>
                         );
                       })}
                     </div>
@@ -506,6 +512,17 @@ export function NewCardForm({
               </>
             )}
           </div>
+          <select
+            value={priority}
+            {...register("priority")}
+            className="flex h-auto items-center rounded-[5px] border-[1px] border-light-600 bg-light-200 px-2 py-1 text-left text-xs capitalize text-light-800 hover:bg-light-300 focus-visible:outline-none dark:border-dark-600 dark:bg-dark-400 dark:text-dark-1000 dark:hover:bg-dark-500"
+          >
+            {priorityOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
           <button
             onClick={(e) => {
               e.preventDefault();
