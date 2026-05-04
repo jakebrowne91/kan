@@ -203,12 +203,15 @@ export const workspaceRouter = createTRPCRouter({
       z.object({
         name: z.string().min(1).max(64),
         description: z.string().max(280).optional(),
-        slug: z
-          .string()
-          .min(3)
-          .max(64)
-          .regex(/^(?![-]+$)[a-zA-Z0-9-]+$/)
-          .optional(),
+        slug: z.preprocess(
+          (value) => (value === "" ? undefined : value),
+          z
+            .string()
+            .min(3)
+            .max(64)
+            .regex(/^(?![-]+$)[a-zA-Z0-9-]+$/)
+            .optional(),
+        ),
       }),
     )
     .output(workspaceCreateResponseSchema)

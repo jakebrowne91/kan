@@ -128,7 +128,7 @@ export function NewWorkspaceForm() {
 
     createWorkspace.mutate({
       name: values.name,
-      slug: values.slug,
+      ...(values.slug ? { slug: values.slug } : {}),
     });
   };
 
