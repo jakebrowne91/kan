@@ -1,21 +1,10 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "RAILPACK",
-    "buildCommand": "pnpm railway:build",
-    "watchPatterns": [
-      "apps/web/**",
-      "packages/**",
-      "tooling/**",
-      "package.json",
-      "pnpm-lock.yaml",
-      "pnpm-workspace.yaml",
-      "turbo.json",
-      "railway.json"
-    ]
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "apps/web/Dockerfile"
   },
   "deploy": {
-    "startCommand": "pnpm railway:start",
     "healthcheckPath": "/",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",

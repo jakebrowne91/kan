@@ -33,8 +33,8 @@ openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
 
 `railway.json` tells Railway to:
 
-- Build with Railpack using `pnpm railway:build`.
-- Start the app with `pnpm railway:start`.
+- Build the app with Kan's production Dockerfile at `apps/web/Dockerfile`.
+- Start the app with the Dockerfile's production `CMD`.
 
 ## Migrations
 
