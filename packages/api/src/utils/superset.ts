@@ -297,6 +297,7 @@ export const launchSupersetAgent = async (
         "id",
         "workspace.id",
         "workspaces.0.id",
+        "created.0.workspaceId",
       ]);
 
       if (!workspaceId) {
