@@ -116,6 +116,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     string | null
   >(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isManualOrdering, setIsManualOrdering] = useState(false);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -189,6 +190,8 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   const secondarySortDirection = getBoardSortDirection(
     router.query.secondarySortDirection,
   );
+  const appliedSortBy = isManualOrdering ? null : sortBy;
+  const appliedSecondarySortBy = isManualOrdering ? null : secondarySortBy;
 
   const {
     data: boardData,
@@ -225,7 +228,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   const isLoading = isInitialLoading || isQueryLoading;
 
   const sortedBoardData = useMemo(() => {
-    if (!boardData || !sortBy) return boardData;
+    if (!boardData || !appliedSortBy) return boardData;
 
     type BoardCard = (typeof boardData.lists)[number]["cards"][number];
     type SortCriterion = {
@@ -234,9 +237,14 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     };
 
     const sortCriteria: SortCriterion[] = [
-      { sortBy, direction: sortDirection },
-      ...(secondarySortBy && secondarySortBy !== sortBy
-        ? [{ sortBy: secondarySortBy, direction: secondarySortDirection }]
+      { sortBy: appliedSortBy, direction: sortDirection },
+      ...(appliedSecondarySortBy && appliedSecondarySortBy !== appliedSortBy
+        ? [
+            {
+              sortBy: appliedSecondarySortBy,
+              direction: secondarySortDirection,
+            },
+          ]
         : []),
     ];
 
@@ -304,10 +312,10 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       })),
     };
   }, [
+    appliedSecondarySortBy,
+    appliedSortBy,
     boardData,
-    secondarySortBy,
     secondarySortDirection,
-    sortBy,
     sortDirection,
   ]);
 
@@ -535,6 +543,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       nextSortBy: BoardSortBy | null,
       nextDirection: BoardSortDirection,
     ) => {
+      setIsManualOrdering(false);
       const nextQuery = { ...router.query };
 
       if (level === "primary") {
@@ -571,6 +580,29 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     },
     [router],
   );
+
+  const clearSortForManualOrdering = useCallback(() => {
+    if (!sortBy && !secondarySortBy) return;
+
+    setIsManualOrdering(true);
+
+    const nextQuery = { ...router.query };
+    delete nextQuery.sortBy;
+    delete nextQuery.sortDirection;
+    delete nextQuery.secondarySortBy;
+    delete nextQuery.secondarySortDirection;
+
+    void router
+      .replace(
+        {
+          pathname: router.pathname,
+          query: nextQuery,
+        },
+        undefined,
+        { shallow: true },
+      )
+      .catch((error) => console.error(error));
+  }, [router, secondarySortBy, sortBy]);
 
   useEffect(() => {
     if (
@@ -1157,7 +1189,10 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                   </Tooltip>
                 </div>
               ) : (
-                <DragDropContext onDragEnd={onDragEnd}>
+                <DragDropContext
+                  onBeforeCapture={clearSortForManualOrdering}
+                  onDragEnd={onDragEnd}
+                >
                   <Droppable
                     droppableId="all-lists"
                     direction="horizontal"
@@ -1195,11 +1230,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                       key={card.publicId}
                                       draggableId={card.publicId}
                                       index={index}
-                                      isDragDisabled={
-                                        !canEditCard ||
-                                        !!sortBy ||
-                                        !!secondarySortBy
-                                      }
+                                      isDragDisabled={!canEditCard}
                                     >
                                       {(provided) => (
                                         <div
