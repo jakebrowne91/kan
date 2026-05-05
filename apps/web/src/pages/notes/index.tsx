@@ -5,13 +5,16 @@ import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import { BubbleMenu, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { addDays, format, isValid, parse } from "date-fns";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   HiChevronLeft,
+  HiChevronRight,
   HiH1,
   HiH2,
   HiMagnifyingGlass,
   HiOutlineBold,
+  HiOutlineCalendarDays,
   HiOutlineChatBubbleLeftEllipsis,
   HiOutlineCodeBracket,
   HiOutlineCodeBracketSquare,
@@ -42,6 +45,7 @@ type Note = RouterOutputs["note"]["list"][number];
 type CodeNoteMode = "env" | "json" | "yaml";
 
 const untitledNote = t`Untitled note`;
+const dailyNoteDateFormat = "EEE, do MMMM, yyyy";
 
 const codeModeLabels = {
   env: "ENV",
@@ -96,6 +100,14 @@ const getCodeNoteMode = (title: string): CodeNoteMode | null => {
   }
 
   return null;
+};
+
+const formatDailyNoteTitle = (date: Date) => format(date, dailyNoteDateFormat);
+
+const parseDailyNoteTitle = (title: string) => {
+  const parsedDate = parse(title.trim(), dailyNoteDateFormat, new Date());
+
+  return isValid(parsedDate) ? parsedDate : null;
 };
 
 const formatUpdatedAt = (note: Note) =>
@@ -757,6 +769,10 @@ const NotesView = () => {
     (note) => note.publicId === selectedNotePublicId,
   );
   const codeMode = getCodeNoteMode(title);
+  const selectedDailyNoteDate = useMemo(
+    () => parseDailyNoteTitle(title),
+    [title],
+  );
 
   const filteredNotes = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -780,6 +796,8 @@ const NotesView = () => {
       });
     },
   });
+  const createNoteMutate = createNote.mutate;
+  const isCreatingNote = createNote.isPending;
 
   const updateNote = api.note.update.useMutation({
     onSuccess: async () => {
@@ -861,12 +879,37 @@ const NotesView = () => {
   const handleCreateNote = () => {
     if (workspace.publicId.length < 12) return;
 
-    createNote.mutate({
+    createNoteMutate({
       workspacePublicId: workspace.publicId,
       title: untitledNote,
       content: "",
     });
   };
+
+  const handleOpenDailyNote = useCallback(
+    (date: Date) => {
+      if (workspace.publicId.length < 12 || isCreatingNote) return;
+
+      const dailyTitle = formatDailyNoteTitle(date);
+      const existingNote = notes.find((note) => note.title === dailyTitle);
+
+      if (existingNote) {
+        setSelectedNotePublicId(existingNote.publicId);
+        return;
+      }
+
+      createNoteMutate({
+        workspacePublicId: workspace.publicId,
+        title: dailyTitle,
+        content: "",
+      });
+    },
+    [createNoteMutate, isCreatingNote, notes, workspace.publicId],
+  );
+
+  const handleOpenToday = useCallback(() => {
+    handleOpenDailyNote(new Date());
+  }, [handleOpenDailyNote]);
 
   const handleDeleteNote = () => {
     if (!selectedNote) return;
@@ -875,11 +918,25 @@ const NotesView = () => {
     deleteNote.mutate({ notePublicId: selectedNote.publicId });
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "d") return;
+      if (!event.metaKey && !event.ctrlKey) return;
+      if (event.altKey || event.shiftKey) return;
+
+      event.preventDefault();
+      handleOpenToday();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleOpenToday]);
+
   return (
     <>
       <PageHead title={t`Notes | ${workspace.name || t`Workspace`}`} />
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex shrink-0 items-center justify-between border-b border-light-300 px-5 py-4 dark:border-dark-300 md:px-6">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-light-300 px-5 py-4 dark:border-dark-300 md:px-6">
           <div>
             <h1 className="text-base font-bold tracking-tight text-light-1000 dark:text-dark-1000">
               {t`Notes`}
@@ -888,14 +945,25 @@ const NotesView = () => {
               {t`Simple markdown notes for this workspace.`}
             </p>
           </div>
-          <Button
-            type="button"
-            onClick={handleCreateNote}
-            isLoading={createNote.isPending}
-            iconLeft={<HiOutlinePlusSmall className="h-4 w-4" />}
-          >
-            {t`New`}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleOpenToday}
+              isLoading={isCreatingNote}
+              iconLeft={<HiOutlineCalendarDays className="h-4 w-4" />}
+            >
+              {t`Today`}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreateNote}
+              isLoading={isCreatingNote}
+              iconLeft={<HiOutlinePlusSmall className="h-4 w-4" />}
+            >
+              {t`New`}
+            </Button>
+          </div>
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[290px_minmax(0,1fr)]">
@@ -985,6 +1053,34 @@ const NotesView = () => {
                       className="min-w-0 flex-1 border-0 bg-transparent text-lg font-bold text-light-1000 outline-none placeholder:text-light-900 dark:text-dark-1000 dark:placeholder:text-dark-900"
                       placeholder={untitledNote}
                     />
+                    {selectedDailyNoteDate ? (
+                      <div className="hidden items-center gap-1 md:flex">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleOpenDailyNote(
+                              addDays(selectedDailyNoteDate, -1),
+                            )
+                          }
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-light-900 transition-colors hover:bg-light-200 hover:text-light-1000 focus:outline-none focus:ring-2 focus:ring-light-600 dark:text-dark-900 dark:hover:bg-dark-200 dark:hover:text-dark-1000 dark:focus:ring-dark-600"
+                          aria-label={t`Previous daily note`}
+                        >
+                          <HiChevronLeft className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleOpenDailyNote(
+                              addDays(selectedDailyNoteDate, 1),
+                            )
+                          }
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-light-900 transition-colors hover:bg-light-200 hover:text-light-1000 focus:outline-none focus:ring-2 focus:ring-light-600 dark:text-dark-900 dark:hover:bg-dark-200 dark:hover:text-dark-1000 dark:focus:ring-dark-600"
+                          aria-label={t`Next daily note`}
+                        >
+                          <HiChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : null}
                     {codeMode ? (
                       <span className="rounded border border-light-300 px-2 py-1 font-mono text-[11px] font-semibold text-light-900 dark:border-dark-300 dark:text-dark-900">
                         {codeModeLabels[codeMode]}
