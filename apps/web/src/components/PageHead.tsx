@@ -10,9 +10,9 @@ export const PageHead = ({ title }: { title: string }) => {
         name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1"
       />
-      <link rel="icon" href="/favicon.png" type="image/png" />
-      <link rel="shortcut icon" href="/favicon.png" type="image/png" />
-      <link rel="apple-touch-icon" href="/icon-512.png" />
+      <link rel="icon" href="/GSD.png" type="image/png" />
+      <link rel="shortcut icon" href="/GSD.png" type="image/png" />
+      <link rel="apple-touch-icon" href="/GSD.png" />
       <link rel="manifest" href="/manifest.json" />
     </Head>
   );
