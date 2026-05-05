@@ -18,6 +18,7 @@ import type { UpdateBoardInput } from "@kan/api/types";
 import type {
   BoardSortBy,
   BoardSortDirection,
+  BoardSortLevel,
 } from "./components/BoardSortDropdown";
 import type { CardPriority } from "./components/Card";
 import type { CardContextMenuAction } from "./components/CardContextMenu";
@@ -183,6 +184,12 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
   const sortBy = getBoardSortBy(router.query.sortBy);
   const sortDirection = getBoardSortDirection(router.query.sortDirection);
+  const rawSecondarySortBy = getBoardSortBy(router.query.secondarySortBy);
+  const secondarySortBy =
+    sortBy && rawSecondarySortBy !== sortBy ? rawSecondarySortBy : null;
+  const secondarySortDirection = getBoardSortDirection(
+    router.query.secondarySortDirection,
+  );
 
   const {
     data: boardData,
@@ -221,8 +228,18 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   const sortedBoardData = useMemo(() => {
     if (!boardData || !sortBy) return boardData;
 
-    const direction = sortDirection === "asc" ? 1 : -1;
     type BoardCard = (typeof boardData.lists)[number]["cards"][number];
+    type SortCriterion = {
+      sortBy: BoardSortBy;
+      direction: BoardSortDirection;
+    };
+
+    const sortCriteria: SortCriterion[] = [
+      { sortBy, direction: sortDirection },
+      ...(secondarySortBy && secondarySortBy !== sortBy
+        ? [{ sortBy: secondarySortBy, direction: secondarySortDirection }]
+        : []),
+    ];
 
     const getLabelsValue = (card: BoardCard) =>
       card.labels
@@ -230,8 +247,14 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         .sort((a, b) => a.localeCompare(b))
         .join(" ");
 
-    const compareBySort = (cardA: BoardCard, cardB: BoardCard) => {
-      if (sortBy === "labels") {
+    const compareByCriterion = (
+      cardA: BoardCard,
+      cardB: BoardCard,
+      criterion: SortCriterion,
+    ) => {
+      const direction = criterion.direction === "asc" ? 1 : -1;
+
+      if (criterion.sortBy === "labels") {
         const hasLabelsA = cardA.labels.length > 0;
         const hasLabelsB = cardB.labels.length > 0;
 
@@ -243,14 +266,14 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         if (comparison !== 0) return comparison * direction;
       }
 
-      if (sortBy === "createdAt") {
+      if (criterion.sortBy === "createdAt") {
         const comparison =
           new Date(cardA.createdAt).getTime() -
           new Date(cardB.createdAt).getTime();
         if (comparison !== 0) return comparison * direction;
       }
 
-      if (sortBy === "priority") {
+      if (criterion.sortBy === "priority") {
         const hasPriorityA = cardA.priority !== null;
         const hasPriorityB = cardB.priority !== null;
 
@@ -260,6 +283,15 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
           (cardA.priority ? sortablePriorityRank[cardA.priority] : 0) -
           (cardB.priority ? sortablePriorityRank[cardB.priority] : 0);
         if (comparison !== 0) return comparison * direction;
+      }
+
+      return 0;
+    };
+
+    const compareBySort = (cardA: BoardCard, cardB: BoardCard) => {
+      for (const criterion of sortCriteria) {
+        const comparison = compareByCriterion(cardA, cardB, criterion);
+        if (comparison !== 0) return comparison;
       }
 
       return cardA.index - cardB.index;
@@ -272,7 +304,13 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         cards: [...list.cards].sort(compareBySort),
       })),
     };
-  }, [boardData, sortBy, sortDirection]);
+  }, [
+    boardData,
+    secondarySortBy,
+    secondarySortDirection,
+    sortBy,
+    sortDirection,
+  ]);
 
   useScrollRestore(
     boardId,
@@ -494,17 +532,33 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
   const updateSort = useCallback(
     async (
+      level: BoardSortLevel,
       nextSortBy: BoardSortBy | null,
       nextDirection: BoardSortDirection,
     ) => {
       const nextQuery = { ...router.query };
 
-      if (nextSortBy) {
-        nextQuery.sortBy = nextSortBy;
-        nextQuery.sortDirection = nextDirection;
+      if (level === "primary") {
+        if (nextSortBy) {
+          nextQuery.sortBy = nextSortBy;
+          nextQuery.sortDirection = nextDirection;
+
+          if (nextQuery.secondarySortBy === nextSortBy) {
+            delete nextQuery.secondarySortBy;
+            delete nextQuery.secondarySortDirection;
+          }
+        } else {
+          delete nextQuery.sortBy;
+          delete nextQuery.sortDirection;
+          delete nextQuery.secondarySortBy;
+          delete nextQuery.secondarySortDirection;
+        }
+      } else if (nextSortBy) {
+        nextQuery.secondarySortBy = nextSortBy;
+        nextQuery.secondarySortDirection = nextDirection;
       } else {
-        delete nextQuery.sortBy;
-        delete nextQuery.sortDirection;
+        delete nextQuery.secondarySortBy;
+        delete nextQuery.secondarySortDirection;
       }
 
       try {
@@ -1032,6 +1086,8 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                 <BoardSortDropdown
                   sortBy={sortBy}
                   direction={sortDirection}
+                  secondarySortBy={secondarySortBy}
+                  secondaryDirection={secondarySortDirection}
                   isLoading={!boardData}
                   onChange={updateSort}
                 />
@@ -1148,7 +1204,11 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                       key={card.publicId}
                                       draggableId={card.publicId}
                                       index={index}
-                                      isDragDisabled={!canEditCard || !!sortBy}
+                                      isDragDisabled={
+                                        !canEditCard ||
+                                        !!sortBy ||
+                                        !!secondarySortBy
+                                      }
                                     >
                                       {(provided) => (
                                         <div
@@ -1214,7 +1274,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                             title={card.title}
                                             ticketNumber={
                                               card.cardNumber != null
-                                                ? `${boardData.workspace.cardPrefix}-${card.cardNumber}`
+                                                ? `${sortedBoardData.workspace.cardPrefix}-${card.cardNumber}`
                                                 : null
                                             }
                                             labels={card.labels}
