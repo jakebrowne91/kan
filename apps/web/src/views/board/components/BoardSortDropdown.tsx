@@ -136,7 +136,7 @@ export function BoardSortDropdown({
       <Menu.Button as="div" className="cursor-pointer">
         <Button
           type="button"
-          variant="secondary"
+          variant={hasActiveSort ? "primary" : "secondary"}
           disabled={isLoading}
           iconLeft={<HiArrowsUpDown />}
         >

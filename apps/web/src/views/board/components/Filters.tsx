@@ -214,7 +214,7 @@ const Filters = ({
         position={position}
       >
         <Button
-          variant="secondary"
+          variant={numOfFilters > 0 ? "primary" : "secondary"}
           disabled={isLoading}
           iconLeft={<IoFilterOutline />}
         >
