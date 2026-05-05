@@ -1,9 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
   <title id="title">GSD</title>
   <rect width="512" height="512" rx="88" fill="#050505"/>
-  <g fill="#f7f7f4">
-    <path d="M151 197c-11-11-28-17-49-17-42 0-70 27-70 66 0 40 28 67 72 67 18 0 34-4 45-11v-30H98v-30h89v76c-21 22-49 34-87 34-69 0-113-44-113-106 0-60 46-105 114-105 33 0 62 10 83 31l-33 25Z"/>
-    <path d="M270 202c-8-15-23-23-45-23-23 0-37 8-37 21 0 14 15 19 53 25 50 8 75 25 75 61 0 40-37 65-90 65-48 0-83-18-100-52l41-18c10 20 31 31 60 31 26 0 41-8 41-22 0-13-14-18-50-23-51-8-78-25-78-63 0-37 35-61 85-61 41 0 72 15 86 42l-41 17Z"/>
-    <path d="M388 146c73 0 113 37 113 100s-40 100-113 100h-80V146h80Zm-35 161h32c44 0 68-22 68-61s-24-61-68-61h-32v122Z"/>
-  </g>
+  <text x="256" y="308" fill="#f7f7f4" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="150" font-weight="800" letter-spacing="0">GSD</text>
 </svg>
