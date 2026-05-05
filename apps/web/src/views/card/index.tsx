@@ -53,6 +53,7 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
   const { canEditCard } = usePermissions();
   const { showPopup } = usePopup();
   const { data: session } = authClient.useSession();
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const cardId = Array.isArray(router.query.cardId)
     ? router.query.cardId[0]
     : router.query.cardId;
@@ -61,6 +62,11 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
     { cardPublicId: cardId ?? "" },
     { enabled: !!cardId && cardId.length >= 12 },
   );
+  const { data: supersetProjects = [], isLoading: isLoadingProjects } =
+    api.superset.listProjects.useQuery(undefined, {
+      enabled: !isTemplate,
+      retry: false,
+    });
   const launchAgent = api.superset.launchAgentFromCard.useMutation({
     onSuccess: async (run) => {
       if (cardId) await utils.card.byId.invalidate({ cardPublicId: cardId });
@@ -90,6 +96,18 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
   const selectedLabels = card?.labels;
   const selectedMembers = card?.members;
   const latestAgentRun = card?.agentRuns[0];
+  const canLaunchAgent =
+    canEdit &&
+    Boolean(card) &&
+    Boolean(selectedProjectId) &&
+    !isLoadingProjects &&
+    !launchAgent.isPending;
+
+  useEffect(() => {
+    if (!selectedProjectId && supersetProjects[0]) {
+      setSelectedProjectId(supersetProjects[0].id);
+    }
+  }, [selectedProjectId, supersetProjects]);
 
   const formattedLabels =
     labels?.map((label) => {
@@ -183,6 +201,34 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
       </div>
       {!isTemplate && (
         <div className="mb-4 flex w-full flex-row">
+          <p className="my-2 mb-2 w-[100px] text-sm font-medium">Project</p>
+          <div className="min-w-0 flex-1">
+            <select
+              value={selectedProjectId}
+              disabled={!canEdit || isLoadingProjects}
+              onChange={(event) => setSelectedProjectId(event.target.value)}
+              className="h-9 w-full rounded-md border border-light-600 bg-light-50 px-2.5 text-sm font-medium text-light-1000 shadow-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-dark-600 dark:bg-dark-300 dark:text-dark-1000"
+            >
+              {isLoadingProjects ? (
+                <option value="">Loading projects...</option>
+              ) : supersetProjects.length ? (
+                supersetProjects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                    {project.defaultBranch
+                      ? ` (${project.defaultBranch})`
+                      : ""}
+                  </option>
+                ))
+              ) : (
+                <option value="">No projects found</option>
+              )}
+            </select>
+          </div>
+        </div>
+      )}
+      {!isTemplate && (
+        <div className="mb-4 flex w-full flex-row">
           <p className="my-2 mb-2 w-[100px] text-sm font-medium">Agent</p>
           <div className="min-w-0 flex-1">
             <Button
@@ -191,11 +237,14 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
                 latestAgentRun?.status === "running" ? "primary" : "secondary"
               }
               iconLeft={<HiOutlineCommandLine />}
-              disabled={!canEdit || !card || launchAgent.isPending}
+              disabled={!canLaunchAgent}
               isLoading={launchAgent.isPending}
               onClick={() => {
-                if (!cardId) return;
-                launchAgent.mutate({ cardPublicId: cardId });
+                if (!cardId || !selectedProjectId) return;
+                launchAgent.mutate({
+                  cardPublicId: cardId,
+                  projectId: selectedProjectId,
+                });
               }}
               fullWidth
             >

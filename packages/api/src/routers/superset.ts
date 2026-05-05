@@ -9,6 +9,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { assertCanEdit } from "../utils/permissions";
 import {
   buildSupersetPrompt,
+  listSupersetProjects,
   launchSupersetAgent,
   toSupersetBranchName,
 } from "../utils/superset";
@@ -24,8 +25,37 @@ const responseSchema = z.object({
 });
 
 export const supersetRouter = createTRPCRouter({
+  listProjects: protectedProcedure
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          defaultBranch: z.string().nullable(),
+          mainRepoPath: z.string().nullable(),
+        }),
+      ),
+    )
+    .query(async () => {
+      try {
+        return await listSupersetProjects();
+      } catch (error) {
+        throw new TRPCError({
+          message:
+            error instanceof Error
+              ? error.message
+              : "Unable to list Superset projects",
+          code: "BAD_REQUEST",
+        });
+      }
+    }),
   launchAgentFromCard: protectedProcedure
-    .input(z.object({ cardPublicId: z.string().min(12) }))
+    .input(
+      z.object({
+        cardPublicId: z.string().min(12),
+        projectId: z.string().min(1),
+      }),
+    )
     .output(responseSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user?.id;
@@ -100,6 +130,7 @@ export const supersetRouter = createTRPCRouter({
           cardTitle: card.title,
           boardName: card.list.board.name,
           listName: card.list.name,
+          projectId: input.projectId,
           branch: toSupersetBranchName(card.publicId, card.title),
           workspaceName: ticketNumber
             ? `${ticketNumber} ${card.title}`

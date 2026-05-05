@@ -25,9 +25,17 @@ type LaunchAgentInput = {
   cardTitle: string;
   boardName: string;
   listName: string;
+  projectId: string;
   branch: string;
   workspaceName: string;
   prompt: string;
+};
+
+export type SupersetProject = {
+  id: string;
+  name: string;
+  defaultBranch: string | null;
+  mainRepoPath: string | null;
 };
 
 export type LaunchAgentResult = {
@@ -119,16 +127,47 @@ const getString = (value: unknown, keys: string[]): string | null => {
   return null;
 };
 
+const getRecordArray = (value: unknown, keys: string[]) => {
+  for (const key of keys) {
+    let current = value;
+
+    for (const segment of key.split(".")) {
+      if (Array.isArray(current)) {
+        current = current[Number(segment)];
+        continue;
+      }
+
+      if (current && typeof current === "object") {
+        current = (current as Record<string, unknown>)[segment];
+        continue;
+      }
+
+      current = null;
+      break;
+    }
+
+    if (Array.isArray(current)) {
+      return current.filter(
+        (item): item is Record<string, unknown> =>
+          Boolean(item) && typeof item === "object",
+      );
+    }
+  }
+
+  return [];
+};
+
 const buildCreateWorkspaceArgs = (
   config: SupersetConfig,
   input: LaunchAgentInput,
 ) => {
   if (!config.deviceId) throw new Error("SUPERSET_DEVICE_ID is not configured");
-  if (!config.projectId) throw new Error("SUPERSET_PROJECT_ID is not configured");
+  const projectId = input.projectId || config.projectId;
+  if (!projectId) throw new Error("Superset project is not configured");
 
   return {
     deviceId: config.deviceId,
-    projectId: config.projectId,
+    projectId,
     workspaces: [
       {
         name: input.workspaceName,
@@ -139,6 +178,44 @@ const buildCreateWorkspaceArgs = (
       },
     ],
   };
+};
+
+export const listSupersetProjects = async (): Promise<SupersetProject[]> => {
+  const config = getConfig();
+  if (!config.deviceId) throw new Error("SUPERSET_DEVICE_ID is not configured");
+
+  const { client, transport } = await createClient(config);
+
+  try {
+    const result = await client.callTool({
+      name: "list_projects",
+      arguments: { deviceId: config.deviceId },
+    });
+    const content = getStructuredContent(result);
+
+    return getRecordArray(content, ["projects"]).flatMap((project) => {
+      if (typeof project.id !== "string" || typeof project.name !== "string") {
+        return [];
+      }
+
+      return [
+        {
+          id: project.id,
+          name: project.name,
+          defaultBranch:
+            typeof project.defaultBranch === "string"
+              ? project.defaultBranch
+              : null,
+          mainRepoPath:
+            typeof project.mainRepoPath === "string"
+              ? project.mainRepoPath
+              : null,
+        },
+      ];
+    });
+  } finally {
+    await transport.close().catch(() => undefined);
+  }
 };
 
 const buildStartAgentArgs = (
@@ -206,7 +283,7 @@ export const launchSupersetAgent = async (
   try {
     if (!config.deviceId) throw new Error("SUPERSET_DEVICE_ID is not configured");
 
-    let workspaceId = config.workspaceId;
+    let workspaceId = input.projectId ? null : config.workspaceId;
     let createWorkspaceResponse: unknown = null;
 
     if (!workspaceId) {
