@@ -64,6 +64,24 @@ import { NewListForm } from "./components/NewListForm";
 import { NewTemplateForm } from "./components/NewTemplateForm";
 
 type PublicListId = string;
+type BoardSortQuery = Record<string, string | string[] | undefined>;
+interface PersistedBoardSortPreference {
+  version: 1;
+  sortBy: BoardSortBy;
+  sortDirection: BoardSortDirection;
+  secondarySortBy: BoardSortBy | null;
+  secondarySortDirection: BoardSortDirection;
+}
+
+const boardSortQueryKeys = [
+  "sortBy",
+  "sortDirection",
+  "secondarySortBy",
+  "secondarySortDirection",
+] as const;
+
+const getBoardSortPreferenceKey = (boardPublicId: string) =>
+  `gsd:board-sort:${boardPublicId}`;
 
 const isEditableTarget = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
@@ -116,6 +134,87 @@ const getBoardSortDirection = (
   return getSingleQueryValue(value) === "desc" ? "desc" : "asc";
 };
 
+const hasBoardSortQuery = (query: BoardSortQuery) =>
+  boardSortQueryKeys.some((key) => query[key] !== undefined);
+
+const readBoardSortPreference = (
+  boardPublicId: string,
+): PersistedBoardSortPreference | null => {
+  try {
+    const rawPreference = localStorage.getItem(
+      getBoardSortPreferenceKey(boardPublicId),
+    );
+    if (!rawPreference) return null;
+
+    const preference = JSON.parse(rawPreference) as Partial<
+      PersistedBoardSortPreference
+    >;
+    const sortBy = getBoardSortBy(preference.sortBy);
+    const secondarySortBy = getBoardSortBy(
+      preference.secondarySortBy ?? undefined,
+    );
+
+    if (preference.version !== 1 || !sortBy) return null;
+
+    return {
+      version: 1,
+      sortBy,
+      sortDirection: getBoardSortDirection(preference.sortDirection),
+      secondarySortBy:
+        secondarySortBy && secondarySortBy !== sortBy ? secondarySortBy : null,
+      secondarySortDirection: getBoardSortDirection(
+        preference.secondarySortDirection,
+      ),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const persistBoardSortPreference = (
+  boardPublicId: string | null,
+  query: BoardSortQuery,
+) => {
+  if (!boardPublicId) return;
+
+  try {
+    const sortBy = getBoardSortBy(query.sortBy);
+    const rawSecondarySortBy = getBoardSortBy(query.secondarySortBy);
+    const secondarySortBy =
+      sortBy && rawSecondarySortBy !== sortBy ? rawSecondarySortBy : null;
+    const storageKey = getBoardSortPreferenceKey(boardPublicId);
+
+    if (!sortBy) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
+
+    const preference: PersistedBoardSortPreference = {
+      version: 1,
+      sortBy,
+      sortDirection: getBoardSortDirection(query.sortDirection),
+      secondarySortBy,
+      secondarySortDirection: getBoardSortDirection(
+        query.secondarySortDirection,
+      ),
+    };
+
+    localStorage.setItem(storageKey, JSON.stringify(preference));
+  } catch {
+    // localStorage can be unavailable in private/locked-down browser contexts.
+  }
+};
+
+const clearBoardSortPreference = (boardPublicId: string | null) => {
+  if (!boardPublicId) return;
+
+  try {
+    localStorage.removeItem(getBoardSortPreferenceKey(boardPublicId));
+  } catch {
+    // localStorage can be unavailable in private/locked-down browser contexts.
+  }
+};
+
 export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   const params = useParams() as { boardId: string | string[] } | null;
   const router = useRouter();
@@ -158,7 +257,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
   const boardId = params?.boardId
     ? Array.isArray(params.boardId)
-      ? params.boardId[0]
+      ? (params.boardId[0] ?? null)
       : params.boardId
     : null;
 
@@ -211,6 +310,41 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   const appliedSortBy = isManualOrdering ? null : sortBy;
   const appliedSecondarySortBy = isManualOrdering ? null : secondarySortBy;
 
+  useEffect(() => {
+    if (!router.isReady || !boardId || isTemplate) return;
+
+    if (hasBoardSortQuery(router.query)) {
+      persistBoardSortPreference(boardId, router.query);
+      return;
+    }
+
+    const preference = readBoardSortPreference(boardId);
+    if (!preference) return;
+
+    const nextQuery = {
+      ...router.query,
+      sortBy: preference.sortBy,
+      sortDirection: preference.sortDirection,
+      ...(preference.secondarySortBy
+        ? {
+            secondarySortBy: preference.secondarySortBy,
+            secondarySortDirection: preference.secondarySortDirection,
+          }
+        : {}),
+    };
+
+    void router
+      .replace(
+        {
+          pathname: router.pathname,
+          query: nextQuery,
+        },
+        undefined,
+        { shallow: true },
+      )
+      .catch((error) => console.error(error));
+  }, [boardId, isTemplate, router]);
+
   const {
     data: boardData,
     isSuccess,
@@ -224,10 +358,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   // Redirect to 404 if board doesn't exist
   useEffect(() => {
     if (router.isReady && boardId && !isQueryLoading) {
-      if (
-        error?.data?.code === "NOT_FOUND" ||
-        (!boardData && !isQueryLoading)
-      ) {
+      if (error?.data?.code === "NOT_FOUND" || !boardData) {
         void router.replace("/404");
       }
     }
@@ -249,10 +380,10 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     if (!boardData || !appliedSortBy) return boardData;
 
     type BoardCard = (typeof boardData.lists)[number]["cards"][number];
-    type SortCriterion = {
+    interface SortCriterion {
       sortBy: BoardSortBy;
       direction: BoardSortDirection;
-    };
+    }
 
     const sortCriteria: SortCriterion[] = [
       { sortBy: appliedSortBy, direction: sortDirection },
@@ -385,10 +516,8 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         icon: "error",
       });
     },
-    onSettled: async (_data, _error, args) => {
-      if (args.index !== undefined || args.listPublicId !== undefined) {
-        await utils.board.byId.invalidate(queryParams);
-      }
+    onSettled: async () => {
+      await utils.board.byId.invalidate(queryParams);
     },
   });
 
@@ -593,6 +722,8 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         delete nextQuery.secondarySortDirection;
       }
 
+      persistBoardSortPreference(boardId, nextQuery);
+
       try {
         await router.push({
           pathname: router.pathname,
@@ -602,7 +733,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         console.error(error);
       }
     },
-    [router],
+    [boardId, router],
   );
 
   const clearSortForManualOrdering = useCallback(() => {
@@ -616,6 +747,8 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     delete nextQuery.secondarySortBy;
     delete nextQuery.secondarySortDirection;
 
+    clearBoardSortPreference(boardId);
+
     void router
       .replace(
         {
@@ -626,7 +759,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         { shallow: true },
       )
       .catch((error) => console.error(error));
-  }, [router, secondarySortBy, sortBy]);
+  }, [boardId, router, secondarySortBy, sortBy]);
 
   useEffect(() => {
     if (
@@ -1131,7 +1264,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   return (
     <>
       <PageHead
-        title={`${boardData?.name ?? (isTemplate ? t`Board` : t`Template`)} | ${workspace.name ?? t`Workspace`}`}
+        title={`${boardData?.name ?? (isTemplate ? t`Board` : t`Template`)} | ${workspace.name}`}
       />
       <div className="relative flex h-full min-h-0 flex-col">
         <PatternedBackground />
