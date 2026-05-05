@@ -70,6 +70,11 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
   const launchAgent = api.superset.launchAgentFromCard.useMutation({
     onSuccess: async (run) => {
       if (cardId) await utils.card.byId.invalidate({ cardPublicId: cardId });
+
+      if (run.supersetUrl && typeof window !== "undefined") {
+        window.location.href = run.supersetUrl;
+      }
+
       showPopup({
         header: "Agent started",
         message: run.supersetUrl

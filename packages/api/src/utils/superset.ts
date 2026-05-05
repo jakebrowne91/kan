@@ -48,6 +48,10 @@ type SupersetWorkspace = {
 type SupersetAgentRun = {
   automationId: string;
   runId: string;
+  id?: string;
+  v2WorkspaceId?: string | null;
+  terminalSessionId?: string | null;
+  chatSessionId?: string | null;
 };
 
 type CreatedSupersetWorkspace = SupersetWorkspace & {
@@ -164,6 +168,36 @@ const isMissingHostProcedureError = (error: unknown, procedure: string) => {
   return (
     message.includes("No procedure found") && message.includes(procedure)
   );
+};
+
+const getRunString = (
+  run: SupersetAgentRun | undefined,
+  key: keyof SupersetAgentRun,
+) => {
+  const value = run?.[key];
+  return typeof value === "string" && value.length ? value : null;
+};
+
+const buildSupersetRunUrl = (args: {
+  workspaceId: string | null;
+  terminalSessionId: string | null;
+  chatSessionId: string | null;
+}) => {
+  if (!args.workspaceId) return null;
+
+  const search = new URLSearchParams();
+
+  if (args.terminalSessionId) {
+    search.set("terminalId", args.terminalSessionId);
+  } else if (args.chatSessionId) {
+    search.set("chatSessionId", args.chatSessionId);
+  }
+
+  search.set("focusRequestId", crypto.randomUUID());
+
+  return `superset://v2-workspace/${encodeURIComponent(
+    args.workspaceId,
+  )}/?${search.toString()}`;
 };
 
 const createWorkspaceViaCurrentHostApi = async (
@@ -386,17 +420,34 @@ export const launchSupersetAgent = async (
   }
 
   const agentRun = workspace.agentRuns[0];
+  const workspaceId =
+    getRunString(agentRun, "v2WorkspaceId") ??
+    ("workspace" in workspace ? null : workspace.id);
+  const terminalSessionId = getRunString(agentRun, "terminalSessionId");
+  const chatSessionId = getRunString(agentRun, "chatSessionId");
+  const sessionId =
+    terminalSessionId ??
+    chatSessionId ??
+    getRunString(agentRun, "runId") ??
+    getRunString(agentRun, "id");
 
   return {
     agent: config.agent,
-    workspaceId: "workspace" in workspace ? null : workspace.id,
-    sessionId: agentRun?.runId ?? null,
-    url: null,
+    workspaceId,
+    sessionId,
+    url: buildSupersetRunUrl({
+      workspaceId,
+      terminalSessionId,
+      chatSessionId,
+    }),
     response: {
       hostId,
       projectId,
       workspace,
       agentRun,
+      workspaceId,
+      terminalSessionId,
+      chatSessionId,
       createPath,
       agentConfigSource: agentConfig
         ? config.agentConfig
