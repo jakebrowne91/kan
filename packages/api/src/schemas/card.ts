@@ -147,6 +147,19 @@ export const cardDetailSchema = z.object({
         .nullable(),
     }),
   ),
+  agentRuns: z.array(
+    z.object({
+      publicId: z.string(),
+      agent: z.string(),
+      status: z.enum(["requested", "running", "failed"]),
+      supersetWorkspaceId: z.string().nullable(),
+      supersetSessionId: z.string().nullable(),
+      supersetUrl: z.string().nullable(),
+      error: z.string().nullable(),
+      createdAt: z.date(),
+      updatedAt: z.date().nullable(),
+    }),
+  ),
 });
 
 // ─── card.getActivities ──────────────────────────────────────

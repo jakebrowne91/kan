@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import * as cardRepo from "@kan/db/repository/card.repo";
+import * as cardAgentRunRepo from "@kan/db/repository/cardAgentRun.repo";
 import * as cardActivityRepo from "@kan/db/repository/cardActivity.repo";
 import * as cardCommentRepo from "@kan/db/repository/cardComment.repo";
 import * as checklistRepo from "@kan/db/repository/checklist.repo";
@@ -734,11 +735,23 @@ export const cardRouter = createTRPCRouter({
                 };
               }),
             ),
-          }
+        }
         : result.list.board.workspace;
+      const agentRuns = await cardAgentRunRepo.listByCardId(ctx.db, result.id);
 
       return {
         ...result,
+        agentRuns: agentRuns.map((run) => ({
+          publicId: run.publicId,
+          agent: run.agent,
+          status: run.status,
+          supersetWorkspaceId: run.supersetWorkspaceId,
+          supersetSessionId: run.supersetSessionId,
+          supersetUrl: run.supersetUrl,
+          error: run.error,
+          createdAt: run.createdAt,
+          updatedAt: run.updatedAt,
+        })),
         attachments: attachmentsWithUrls,
         list: {
           ...result.list,

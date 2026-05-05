@@ -55,6 +55,7 @@
     "@kan/logger": "workspace:^",
     "@kan/shared": "workspace:^",
     "@kan/stripe": "workspace:^",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@trpc/server": "catalog:",
     "rate-limiter-flexible": "^9.0.1",
     "superjson": "2.2.1",

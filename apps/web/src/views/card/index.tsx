@@ -3,12 +3,13 @@ import { useRouter } from "next/router";
 import { t } from "@lingui/core/macro";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { HiXMark } from "react-icons/hi2";
+import { HiOutlineCommandLine, HiXMark } from "react-icons/hi2";
 import { IoChevronForwardSharp } from "react-icons/io5";
 
 import { authClient } from "@kan/auth/client";
 
 import Avatar from "~/components/Avatar";
+import Button from "~/components/Button";
 import Editor from "~/components/Editor";
 import FeedbackModal from "~/components/FeedbackModal";
 import { LabelForm } from "~/components/LabelForm";
@@ -48,7 +49,9 @@ interface FormValues {
 
 export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
   const router = useRouter();
+  const utils = api.useUtils();
   const { canEditCard } = usePermissions();
+  const { showPopup } = usePopup();
   const { data: session } = authClient.useSession();
   const cardId = Array.isArray(router.query.cardId)
     ? router.query.cardId[0]
@@ -58,6 +61,25 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
     { cardPublicId: cardId ?? "" },
     { enabled: !!cardId && cardId.length >= 12 },
   );
+  const launchAgent = api.superset.launchAgentFromCard.useMutation({
+    onSuccess: async (run) => {
+      if (cardId) await utils.card.byId.invalidate({ cardPublicId: cardId });
+      showPopup({
+        header: "Agent started",
+        message: run.supersetUrl
+          ? "Superset is working on this card."
+          : "Superset accepted the task.",
+        icon: "success",
+      });
+    },
+    onError: (error) => {
+      showPopup({
+        header: "Unable to start agent",
+        message: error.message,
+        icon: "error",
+      });
+    },
+  });
 
   const isCreator = card?.createdBy && session?.user.id === card.createdBy;
   const canEdit = canEditCard || isCreator;
@@ -67,6 +89,7 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
   const workspaceMembers = board?.workspace.members;
   const selectedLabels = card?.labels;
   const selectedMembers = card?.members;
+  const latestAgentRun = card?.agentRuns[0];
 
   const formattedLabels =
     labels?.map((label) => {
@@ -158,6 +181,49 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
           disabled={!canEdit}
         />
       </div>
+      {!isTemplate && (
+        <div className="mb-4 flex w-full flex-row">
+          <p className="my-2 mb-2 w-[100px] text-sm font-medium">Agent</p>
+          <div className="min-w-0 flex-1">
+            <Button
+              type="button"
+              variant={
+                latestAgentRun?.status === "running" ? "primary" : "secondary"
+              }
+              iconLeft={<HiOutlineCommandLine />}
+              disabled={!canEdit || !card || launchAgent.isPending}
+              isLoading={launchAgent.isPending}
+              onClick={() => {
+                if (!cardId) return;
+                launchAgent.mutate({ cardPublicId: cardId });
+              }}
+              fullWidth
+            >
+              {latestAgentRun?.status === "running"
+                ? "Agent running"
+                : "Start agent"}
+            </Button>
+            {latestAgentRun && (
+              <div className="mt-2 text-xs text-light-800 dark:text-dark-800">
+                {latestAgentRun.status === "failed" && latestAgentRun.error ? (
+                  <p>{latestAgentRun.error}</p>
+                ) : latestAgentRun.supersetUrl ? (
+                  <a
+                    className="font-medium underline underline-offset-2"
+                    href={latestAgentRun.supersetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open Superset run
+                  </a>
+                ) : (
+                  <p>{latestAgentRun.agent}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
