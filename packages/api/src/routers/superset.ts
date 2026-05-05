@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import * as cardRepo from "@kan/db/repository/card.repo";
 import * as cardAgentRunRepo from "@kan/db/repository/cardAgentRun.repo";
+import * as cardActivityRepo from "@kan/db/repository/cardActivity.repo";
+import * as listRepo from "@kan/db/repository/list.repo";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { assertCanEdit } from "../utils/permissions";
@@ -23,6 +25,9 @@ const responseSchema = z.object({
   supersetUrl: z.string().nullable(),
   error: z.string().nullable(),
 });
+
+const normaliseListName = (value: string) =>
+  value.trim().toLowerCase().replace(/\s+/g, " ");
 
 export const supersetRouter = createTRPCRouter({
   listProjects: protectedProcedure
@@ -145,6 +150,41 @@ export const supersetRouter = createTRPCRouter({
           supersetUrl: result.url,
           response: result.response,
         });
+
+        const inProgressList = card.list.board.lists.find(
+          (list) => normaliseListName(list.name) === "in progress",
+        );
+
+        if (
+          inProgressList &&
+          inProgressList.publicId !== cardSummary.listPublicId
+        ) {
+          const targetList = await listRepo.getByPublicId(
+            ctx.db,
+            inProgressList.publicId,
+          );
+
+          if (targetList) {
+            const currentCard = await cardRepo.getByPublicId(
+              ctx.db,
+              input.cardPublicId,
+            );
+
+            await cardRepo.reorder(ctx.db, {
+              cardId: card.id,
+              newListId: targetList.id,
+              newIndex: undefined,
+            });
+
+            await cardActivityRepo.create(ctx.db, {
+              type: "card.updated.list",
+              cardId: card.id,
+              createdBy: userId,
+              fromListId: currentCard?.listId,
+              toListId: targetList.id,
+            });
+          }
+        }
 
         return {
           publicId: updatedRun.publicId,
