@@ -1,5 +1,5 @@
 import { format, isBefore, isSameYear, startOfDay } from "date-fns";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HiOutlinePaperClip } from "react-icons/hi";
 import {
   HiBars3BottomLeft,
@@ -102,6 +102,14 @@ const Card = ({
   const hasAttachments = attachments && attachments.length > 0;
   const hasDueDate = !!dueDate;
 
+  useEffect(() => {
+    if (!isEditingTitle) setDraftTitle(title);
+  }, [isEditingTitle, title]);
+
+  useEffect(() => {
+    if (!isEditingDescription) setDraftDescription(descriptionText);
+  }, [descriptionText, isEditingDescription]);
+
   const commitTitle = () => {
     const nextTitle = draftTitle.trim();
     setIsEditingTitle(false);
@@ -109,6 +117,7 @@ const Card = ({
       setDraftTitle(title);
       return;
     }
+    setDraftTitle(nextTitle);
     onUpdate({ title: nextTitle });
   };
 
@@ -116,6 +125,7 @@ const Card = ({
     const nextDescription = draftDescription.trim();
     setIsEditingDescription(false);
     if (nextDescription === descriptionText) return;
+    setDraftDescription(nextDescription);
     onUpdate({ description: nextDescription });
   };
 
@@ -183,7 +193,7 @@ const Card = ({
         </button>
       )}
 
-      {(isSelected || hasDescription) && (
+      {(isSelected || hasDescription || isEditingDescription) && (
         <div className="mt-1">
           {isEditingDescription && canEdit ? (
             <textarea

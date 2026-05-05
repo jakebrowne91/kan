@@ -367,8 +367,10 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         icon: "error",
       });
     },
-    onSettled: async () => {
-      await utils.board.byId.invalidate(queryParams);
+    onSettled: async (_data, _error, args) => {
+      if (args.index !== undefined || args.listPublicId !== undefined) {
+        await utils.board.byId.invalidate(queryParams);
+      }
     },
   });
 
