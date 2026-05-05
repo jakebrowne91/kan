@@ -46,7 +46,7 @@ export const MentionTemplate = ({
             color: "#232323",
           }}
         >
-          kan.bn
+          GSD
         </Heading>
         <Heading
           style={{ fontSize: "24px", fontWeight: "bold", color: "#232323" }}
@@ -105,4 +105,3 @@ export const MentionTemplate = ({
 );
 
 export default MentionTemplate;
-

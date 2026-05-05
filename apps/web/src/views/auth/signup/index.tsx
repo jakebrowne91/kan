@@ -8,6 +8,7 @@ import { useState } from "react";
 import { authClient } from "@kan/auth/client";
 
 import { Auth } from "~/components/AuthForm";
+import { BrandLogo } from "~/components/BrandLogo";
 import { PageHead } from "~/components/PageHead";
 import PatternedBackground from "~/components/PatternedBackground";
 
@@ -33,14 +34,12 @@ export default function SignUpPage() {
   if (isSignUpDisabled && !isInviteFlow) {
     return (
       <>
-        <PageHead title={t`Sign up | kan.bn`} />
+        <PageHead title="Sign up | GSD" />
         <main className="h-screen bg-light-100 pt-20 dark:bg-dark-50 sm:pt-0">
           <div className="justify-top flex h-full flex-col items-center px-4 sm:justify-center">
             <div className="z-10 flex w-full flex-col items-center">
               <Link href="/">
-                <h1 className="mb-6 text-lg font-bold tracking-tight text-light-1000 dark:text-dark-1000">
-                  kan.bn
-                </h1>
+                <BrandLogo className="mb-6 h-4 w-auto" />
               </Link>
               <p className="mb-10 text-3xl font-bold tracking-tight text-light-1000 dark:text-dark-1000">
                 {t`Sign up disabled`}
@@ -58,14 +57,12 @@ export default function SignUpPage() {
 
   return (
     <>
-      <PageHead title={t`Sign up | kan.bn`} />
+      <PageHead title="Sign up | GSD" />
       <main className="h-screen bg-light-100 pt-20 dark:bg-dark-50 sm:pt-0">
         <div className="justify-top flex h-full flex-col items-center px-4 sm:justify-center">
           <div className="z-10 flex w-full flex-col items-center">
             <Link href="/">
-              <h1 className="mb-6 text-lg font-bold tracking-tight text-light-1000 dark:text-dark-1000">
-                kan.bn
-              </h1>
+              <BrandLogo className="mb-6 h-4 w-auto" />
             </Link>
             <p className="mb-10 text-3xl font-bold tracking-tight text-light-1000 dark:text-dark-1000">
               {isMagicLinkSent ? t`Check your inbox` : t`Get started`}

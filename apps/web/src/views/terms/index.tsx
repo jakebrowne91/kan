@@ -27,13 +27,14 @@ export default function TermsView() {
   );
 
   const NAME = "Open Engineering";
-  const DOMAIN = "https://kan.bn";
+  const DOMAIN = "https://gsd.jakebrowne.ie";
   const PRIVACY_URL = `${DOMAIN}/privacy`;
   const CONTACT_EMAIL = "support@kan.bn";
+  const CONTACT_LABEL = "GSD";
 
   return (
     <Layout>
-      <PageHead title="Terms of Service | kan.bn" />
+      <PageHead title="Terms of Service | GSD" />
       <div className="flex flex-col items-center">
         <div className="mb-20 flex h-full w-full max-w-[800px] flex-col lg:pt-[5rem]">
           <div className="flex items-center justify-center py-36 text-4xl font-bold tracking-tight text-light-1000 dark:text-dark-1000">
@@ -62,7 +63,7 @@ export default function TermsView() {
             <Text>
               If you do not agree with (or cannot comply with) Agreements, then
               you may not use the Service, but please let us know by emailing at{" "}
-              {CONTACT_EMAIL} so we can try to find a solution. These Terms
+              {CONTACT_LABEL} so we can try to find a solution. These Terms
               apply to all visitors, users and others who wish to access or use
               Service. Thank you for being responsible.
             </Text>
@@ -75,7 +76,7 @@ export default function TermsView() {
               newsletters, marketing or promotional materials and other
               information we may send. However, you may opt out of receiving
               any, or all, of these communications from us by following the
-              unsubscribe link or by emailing at {CONTACT_EMAIL}.
+              unsubscribe link or by emailing at {CONTACT_LABEL}.
             </Text>
           </div>
 
@@ -608,7 +609,7 @@ export default function TermsView() {
                 className="line-height text-md mb-4 text-light-1000 dark:text-dark-900"
                 href="mailto:support@kan.bn"
               >
-                support@kan.bn
+                GSD
               </Link>
             </Text>
           </div>

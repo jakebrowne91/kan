@@ -5,7 +5,7 @@
     "productivity",
     "utilities"
   ],
-  "description": "The open source Trello alternative.",
+  "description": "GSD task board.",
   "display": "standalone",
   "icons": [
     {
@@ -31,9 +31,9 @@
     }
   ],
   "orientation": "portrait-primary",
-  "name": "Kan.bn | The open source alternative to Trello",
+  "name": "GSD",
   "scope": "/",
-  "short_name": "Kan.bn",
+  "short_name": "GSD",
   "start_url": "/",
   "theme_color": "#000000"
 }

@@ -6,6 +6,7 @@ import { env } from "next-runtime-env";
 import { useEffect, useState } from "react";
 import { HiLink, HiOutlineLockClosed } from "react-icons/hi2";
 
+import { BrandLogo } from "~/components/BrandLogo";
 import Button from "~/components/Button";
 import Modal from "~/components/modal";
 import { PageHead } from "~/components/PageHead";
@@ -258,10 +259,10 @@ export default function PublicBoardView() {
 
           {IS_CLOUD && (
             <Link
-              className="text-lg font-bold tracking-tight text-neutral-900 dark:text-dark-1000"
+              className="inline-flex"
               href="/"
             >
-              kan.bn
+              <BrandLogo className="h-4 w-auto" />
             </Link>
           )}
 
@@ -273,7 +274,7 @@ export default function PublicBoardView() {
               className="absolute right-[1rem] inline-flex items-center gap-[0.175rem] rounded-full border border-light-300 bg-light-50 px-3 py-1 text-[11px] font-medium text-light-950 shadow-sm transition-colors hover:bg-light-100 dark:border-dark-300 dark:bg-dark-50 dark:text-dark-900 dark:hover:bg-dark-100"
             >
               <span>{`Powered by`}</span>
-              <span className="font-semibold">kan.bn</span>
+              <span className="font-semibold">GSD</span>
             </a>
           )}
         </div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
 import { t } from "@lingui/core/macro";
+import { BrandLogo } from "~/components/BrandLogo";
 import { PageHead } from "~/components/PageHead";
 import PatternedBackground from "~/components/PatternedBackground";
 import { api } from "~/utils/api";
@@ -72,7 +73,7 @@ export default function PublicBoardsView() {
 
   return (
     <>
-      <PageHead title={`${data?.name ?? t`Workspace`} | kan.bn`} />
+      <PageHead title={`${data?.name ?? t`Workspace`} | GSD`} />
       <style jsx global>{`
         html {
           height: 100vh;
@@ -96,10 +97,10 @@ export default function PublicBoardsView() {
           )}
         </div>
         <Link
-          className="text-lg font-bold tracking-tight text-neutral-900 dark:text-dark-1000"
+          className="inline-flex"
           href="/"
         >
-          kan.bn
+          <BrandLogo className="h-4 w-auto" />
         </Link>
       </div>
     </>

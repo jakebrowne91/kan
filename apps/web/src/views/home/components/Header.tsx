@@ -3,6 +3,7 @@ import { t } from "@lingui/core/macro";
 import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 
+import { BrandLogo } from "~/components/BrandLogo";
 import Button from "~/components/Button";
 
 const Header = ({ isLoggedIn }: { isLoggedIn: boolean }) => {
@@ -75,9 +76,7 @@ const Header = ({ isLoggedIn }: { isLoggedIn: boolean }) => {
           <div className="mx-auto flex w-full max-w-[1100px] items-center justify-between lg:px-4">
             <div className="my-auto flex items-center justify-between">
               <Link href="/">
-                <h1 className="text-lg font-bold tracking-tight text-neutral-900 dark:text-dark-1000 lg:w-[200px]">
-                  kan.bn
-                </h1>
+                <BrandLogo className="h-4 w-auto lg:mr-[129px]" />
               </Link>
             </div>
             {/* Desktop Menu */}
