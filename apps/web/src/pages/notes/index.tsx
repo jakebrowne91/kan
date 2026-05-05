@@ -38,8 +38,64 @@ import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
 
 type Note = RouterOutputs["note"]["list"][number];
+type CodeNoteMode = "env" | "json" | "yaml";
 
 const untitledNote = t`Untitled note`;
+
+const codeModeLabels = {
+  env: "ENV",
+  json: "JSON",
+  yaml: "YAML",
+} satisfies Record<CodeNoteMode, string>;
+
+const getCodeNoteMode = (title: string): CodeNoteMode | null => {
+  const titleParts = title
+    .trim()
+    .toLowerCase()
+    .split(/[\s/\\]+/);
+
+  if (
+    titleParts.some(
+      (part) =>
+        part === ".env" ||
+        part.startsWith(".env.") ||
+        part.endsWith(".env") ||
+        part.includes(".env."),
+    )
+  ) {
+    return "env";
+  }
+
+  if (
+    titleParts.some(
+      (part) =>
+        part.endsWith(".json") ||
+        part.includes(".json.") ||
+        part.includes(".json-") ||
+        part.includes(".json_"),
+    )
+  ) {
+    return "json";
+  }
+
+  if (
+    titleParts.some(
+      (part) =>
+        part.endsWith(".yaml") ||
+        part.endsWith(".yml") ||
+        part.includes(".yaml.") ||
+        part.includes(".yml.") ||
+        part.includes(".yaml-") ||
+        part.includes(".yml-") ||
+        part.includes(".yaml_") ||
+        part.includes(".yml_"),
+    )
+  ) {
+    return "yaml";
+  }
+
+  return null;
+};
 
 const formatUpdatedAt = (note: Note) =>
   new Intl.DateTimeFormat(undefined, {
@@ -456,6 +512,227 @@ function NotesMarkdownEditor({
   );
 }
 
+const codeEditorLineClass = "h-6 whitespace-pre text-sm leading-6";
+
+const renderCodePrimitive = (value: string, keyPrefix: string) => {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  const className =
+    trimmed.startsWith('"') || trimmed.startsWith("'")
+      ? "text-emerald-700 dark:text-emerald-300"
+      : /^(true|false|null|undefined)$/i.test(trimmed) ||
+          /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)
+        ? "text-violet-700 dark:text-violet-300"
+        : "text-amber-700 dark:text-amber-300";
+
+  return (
+    <span key={keyPrefix} className={className}>
+      {value}
+    </span>
+  );
+};
+
+const renderEnvLine = (line: string, lineIndex: number) => {
+  if (!line) return <span>{"\u00a0"}</span>;
+  if (line.trimStart().startsWith("#")) {
+    return <span className="text-light-800 dark:text-dark-800">{line}</span>;
+  }
+
+  const match = /^(\s*)(export\s+)?([A-Za-z_][\w.-]*)(\s*=\s*)(.*)$/.exec(line);
+  if (!match) return <span>{line}</span>;
+
+  return (
+    <>
+      <span>{match[1]}</span>
+      {match[2] ? (
+        <span className="text-violet-700 dark:text-violet-300">{match[2]}</span>
+      ) : null}
+      <span className="text-blue-700 dark:text-blue-300">{match[3]}</span>
+      <span className="text-light-900 dark:text-dark-900">{match[4]}</span>
+      {renderCodePrimitive(match[5] ?? "", `env-value-${lineIndex}`)}
+    </>
+  );
+};
+
+const renderJsonLine = (line: string, lineIndex: number) => {
+  if (!line) return <span>{"\u00a0"}</span>;
+
+  const tokens =
+    /"(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}:,]|\[|\]/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let tokenMatch: RegExpExecArray | null;
+
+  while ((tokenMatch = tokens.exec(line))) {
+    const token = tokenMatch[0];
+    const index = tokenMatch.index;
+
+    if (index > lastIndex) {
+      parts.push(
+        <span key={`json-plain-${lineIndex}-${lastIndex}`}>
+          {line.slice(lastIndex, index)}
+        </span>,
+      );
+    }
+
+    const isKey =
+      token.startsWith('"') && /^\s*:/.test(line.slice(index + token.length));
+    const className = isKey
+      ? "text-blue-700 dark:text-blue-300"
+      : token.startsWith('"')
+        ? "text-emerald-700 dark:text-emerald-300"
+        : /^(true|false|null|-?\d)/.test(token)
+          ? "text-violet-700 dark:text-violet-300"
+          : "text-light-900 dark:text-dark-900";
+
+    parts.push(
+      <span key={`json-token-${lineIndex}-${index}`} className={className}>
+        {token}
+      </span>,
+    );
+    lastIndex = index + token.length;
+  }
+
+  if (lastIndex < line.length) {
+    parts.push(
+      <span key={`json-plain-${lineIndex}-${lastIndex}`}>
+        {line.slice(lastIndex)}
+      </span>,
+    );
+  }
+
+  return parts;
+};
+
+const renderYamlLine = (line: string, lineIndex: number) => {
+  if (!line) return <span>{"\u00a0"}</span>;
+  if (line.trimStart().startsWith("#")) {
+    return <span className="text-light-800 dark:text-dark-800">{line}</span>;
+  }
+
+  const commentIndex = line.indexOf(" #");
+  const body = commentIndex >= 0 ? line.slice(0, commentIndex) : line;
+  const comment = commentIndex >= 0 ? line.slice(commentIndex) : "";
+  const keyMatch = /^(\s*(?:-\s*)?)([A-Za-z0-9_.-]+)(\s*:\s*)(.*)$/.exec(body);
+
+  if (!keyMatch) {
+    return (
+      <>
+        <span>{body}</span>
+        {comment ? (
+          <span className="text-light-800 dark:text-dark-800">{comment}</span>
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <span>{keyMatch[1]}</span>
+      <span className="text-blue-700 dark:text-blue-300">{keyMatch[2]}</span>
+      <span className="text-light-900 dark:text-dark-900">{keyMatch[3]}</span>
+      {renderCodePrimitive(keyMatch[4] ?? "", `yaml-value-${lineIndex}`)}
+      {comment ? (
+        <span className="text-light-800 dark:text-dark-800">{comment}</span>
+      ) : null}
+    </>
+  );
+};
+
+const renderCodeLine = (
+  line: string,
+  mode: CodeNoteMode,
+  lineIndex: number,
+) => {
+  if (mode === "env") return renderEnvLine(line, lineIndex);
+  if (mode === "json") return renderJsonLine(line, lineIndex);
+  return renderYamlLine(line, lineIndex);
+};
+
+function NotesCodeEditor({
+  mode,
+  value,
+  onChange,
+}: {
+  mode: CodeNoteMode;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const lines = value.split("\n");
+  const visibleLineCount = Math.max(lines.length, 20);
+  const editorHeight = visibleLineCount * 24 + 40;
+  const editorWidth =
+    Math.max(...lines.map((line) => line.length), 80) * 8 + 56;
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Tab") return;
+
+    event.preventDefault();
+    const textarea = event.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const nextValue = `${value.slice(0, start)}  ${value.slice(end)}`;
+
+    onChange(nextValue);
+    window.requestAnimationFrame(() => {
+      textarea.selectionStart = start + 2;
+      textarea.selectionEnd = start + 2;
+    });
+  };
+
+  return (
+    <div className="flex flex-col bg-light-50 dark:bg-dark-50">
+      <div className="overflow-x-auto">
+        <div
+          className="relative min-w-full font-mono text-sm text-light-1000 dark:text-dark-1000"
+          style={{ height: editorHeight, width: editorWidth }}
+        >
+          <div
+            aria-hidden="true"
+            className="grid grid-cols-[3.5rem_minmax(0,1fr)]"
+            style={{ height: editorHeight }}
+          >
+            <div className="select-none border-r border-light-300 bg-light-100 px-3 py-5 text-right text-light-800 dark:border-dark-300 dark:bg-dark-100 dark:text-dark-800">
+              {Array.from({ length: visibleLineCount }, (_, index) => (
+                <div key={index} className={codeEditorLineClass}>
+                  {index + 1}
+                </div>
+              ))}
+            </div>
+            <pre className="m-0 overflow-hidden px-5 py-5">
+              {Array.from({ length: visibleLineCount }, (_, index) => (
+                <div key={index} className={codeEditorLineClass}>
+                  {renderCodeLine(lines[index] ?? "", mode, index)}
+                </div>
+              ))}
+            </pre>
+          </div>
+          {!value ? (
+            <div className="pointer-events-none absolute left-[3.5rem] top-0 px-5 py-5 font-mono text-sm leading-6 text-light-800 dark:text-dark-800">
+              {mode === "env"
+                ? "API_KEY=..."
+                : mode === "json"
+                  ? '{ "key": "value" }'
+                  : "key: value"}
+            </div>
+          ) : null}
+          <textarea
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={handleKeyDown}
+            spellCheck={false}
+            wrap="off"
+            aria-label={t`Note content`}
+            className="absolute left-[3.5rem] right-0 top-0 resize-none overflow-hidden border-0 bg-transparent px-5 py-5 font-mono text-sm leading-6 text-transparent caret-light-1000 outline-none selection:bg-blue-500/20 focus:outline-none dark:caret-dark-1000 dark:selection:bg-blue-300/20"
+            style={{ height: editorHeight }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const NotesView = () => {
   const { workspace } = useWorkspace();
   const { showPopup } = usePopup();
@@ -477,6 +754,7 @@ const NotesView = () => {
   const selectedNote = notes.find(
     (note) => note.publicId === selectedNotePublicId,
   );
+  const codeMode = getCodeNoteMode(title);
 
   const filteredNotes = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -676,6 +954,11 @@ const NotesView = () => {
                       className="min-w-0 flex-1 border-0 bg-transparent text-lg font-bold text-light-1000 outline-none placeholder:text-light-900 dark:text-dark-1000 dark:placeholder:text-dark-900"
                       placeholder={untitledNote}
                     />
+                    {codeMode ? (
+                      <span className="rounded border border-light-300 px-2 py-1 font-mono text-[11px] font-semibold text-light-900 dark:border-dark-300 dark:text-dark-900">
+                        {codeModeLabels[codeMode]}
+                      </span>
+                    ) : null}
                     <Button
                       type="button"
                       variant="ghost"
@@ -687,11 +970,19 @@ const NotesView = () => {
                       aria-label={t`Delete note`}
                     />
                   </div>
-                  <NotesMarkdownEditor
-                    value={content}
-                    onChange={setContent}
-                    placeholder={t`Write markdown...`}
-                  />
+                  {codeMode ? (
+                    <NotesCodeEditor
+                      mode={codeMode}
+                      value={content}
+                      onChange={setContent}
+                    />
+                  ) : (
+                    <NotesMarkdownEditor
+                      value={content}
+                      onChange={setContent}
+                      placeholder={t`Write markdown...`}
+                    />
+                  )}
                 </section>
               </div>
             ) : (
