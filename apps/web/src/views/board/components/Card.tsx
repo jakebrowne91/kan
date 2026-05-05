@@ -222,7 +222,7 @@ const Card = ({
                 setDraftDescription(descriptionText);
                 setIsEditingDescription(true);
               }}
-              className="line-clamp-3 w-full text-left text-xs text-light-950 focus:outline-none dark:text-dark-900"
+              className="line-clamp-1 w-full text-left text-xs text-light-950 focus:outline-none dark:text-dark-900"
             >
               {hasDescription ? descriptionText : "Add description"}
             </button>
