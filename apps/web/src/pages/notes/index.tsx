@@ -7,6 +7,7 @@ import { BubbleMenu, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  HiChevronLeft,
   HiH1,
   HiH2,
   HiMagnifyingGlass,
@@ -743,6 +744,7 @@ const NotesView = () => {
   const [search, setSearch] = useState("");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
   const loadedNotePublicId = useRef<string | null>(null);
 
   const notesQuery = api.note.list.useQuery(
@@ -808,9 +810,20 @@ const NotesView = () => {
   });
 
   useEffect(() => {
-    if (selectedNotePublicId || notes.length === 0) return;
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+    const updateViewport = () => setIsDesktopViewport(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktopViewport || selectedNotePublicId || notes.length === 0)
+      return;
     setSelectedNotePublicId(notes[0]?.publicId ?? null);
-  }, [notes, selectedNotePublicId]);
+  }, [isDesktopViewport, notes, selectedNotePublicId]);
 
   useEffect(() => {
     if (!selectedNote) {
@@ -886,7 +899,12 @@ const NotesView = () => {
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[290px_minmax(0,1fr)]">
-          <aside className="flex min-h-0 flex-col border-b border-light-300 dark:border-dark-300 md:border-b-0 md:border-r">
+          <aside
+            className={twMerge(
+              "min-h-0 flex-col border-b border-light-300 dark:border-dark-300 md:flex md:border-b-0 md:border-r",
+              selectedNote ? "hidden" : "flex",
+            )}
+          >
             <div className="p-3">
               <div className="relative">
                 <HiMagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-light-900 dark:text-dark-900" />
@@ -942,11 +960,24 @@ const NotesView = () => {
             </div>
           </aside>
 
-          <main className="h-full min-h-0 overflow-y-auto">
+          <main
+            className={twMerge(
+              "h-full min-h-0 overflow-y-auto md:block",
+              selectedNote ? "block" : "hidden",
+            )}
+          >
             {selectedNote ? (
               <div className="flex min-h-full flex-col">
                 <section className="flex min-h-full flex-col">
                   <div className="flex shrink-0 items-center gap-2 border-b border-light-300 px-5 py-3 dark:border-dark-300">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedNotePublicId(null)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md text-light-900 transition-colors hover:bg-light-200 hover:text-light-1000 focus:outline-none focus:ring-2 focus:ring-light-600 dark:text-dark-900 dark:hover:bg-dark-200 dark:hover:text-dark-1000 dark:focus:ring-dark-600 md:hidden"
+                      aria-label={t`Back to notes`}
+                    >
+                      <HiChevronLeft className="h-5 w-5" />
+                    </button>
                     <HiOutlineDocumentText className="h-5 w-5 text-light-900 dark:text-dark-900" />
                     <input
                       value={title}
