@@ -62,7 +62,9 @@ const Modal: React.FC<Props> = ({
         </Transition.Child>
 
         <div className="fixed inset-0 z-50 w-screen overflow-y-auto">
-          <div className={`flex min-h-full justify-center p-4 text-center sm:p-0 ${centered ? "items-center" : "items-start sm:items-start"}`}>
+          <div
+            className={`flex min-h-full justify-center p-4 text-center sm:p-0 ${centered ? "items-center" : "items-start sm:items-start"}`}
+          >
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
@@ -73,7 +75,7 @@ const Modal: React.FC<Props> = ({
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
               <Dialog.Panel
-                className={`relative ${centered ? "" : positionFromTopMap[positionFromTop]} w-full transform rounded-lg border border-light-600 bg-white/90 text-left shadow-3xl-light backdrop-blur-[6px] transition-all dark:border-dark-600 dark:bg-dark-100/90 dark:shadow-3xl-dark ${modalSizeMap[modalSize]}`}
+                className={`relative ${centered ? "" : positionFromTopMap[positionFromTop]} w-full transform rounded-lg border border-light-700 bg-light-100 text-left text-light-1000 shadow-3xl-light transition-all dark:border-dark-600 dark:bg-dark-100 dark:text-dark-1000 dark:shadow-3xl-dark ${modalSizeMap[modalSize]}`}
               >
                 {children}
               </Dialog.Panel>

@@ -147,6 +147,7 @@ export function NewCardForm({
               title: args.title,
               listId: 2,
               description: "",
+              createdAt: new Date(),
               dueDate: args.dueDate ?? null,
               priority: args.priority ?? null,
               cardNumber: null,
@@ -327,6 +328,7 @@ export function NewCardForm({
           <Input
             id="title"
             placeholder={t`Card title`}
+            className="px-3 text-base font-medium placeholder:font-medium"
             {...register("title")}
             onKeyDown={async (e) => {
               if (e.key === "Enter") {
@@ -337,7 +339,7 @@ export function NewCardForm({
           />
         </div>
         <div className="mt-2">
-          <div className="block max-h-48 min-h-24 w-full overflow-y-auto rounded-md border-0 bg-dark-300 bg-white/5 px-3 py-2 text-sm shadow-sm ring-1 ring-inset ring-light-600 focus-within:ring-2 focus-within:ring-inset focus-within:ring-light-700 dark:ring-dark-700 dark:focus-within:ring-dark-700 sm:leading-6">
+          <div className="block max-h-48 min-h-24 w-full overflow-y-auto rounded-md border-0 bg-light-50 px-3 py-2 text-sm text-light-1000 shadow-sm ring-1 ring-inset ring-light-700 focus-within:ring-2 focus-within:ring-inset focus-within:ring-light-900 dark:bg-dark-300 dark:text-dark-1000 dark:ring-dark-700 dark:focus-within:ring-dark-900 sm:leading-6">
             <Editor
               content={description}
               onChange={(value) => {

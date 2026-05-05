@@ -15,6 +15,10 @@ import {
 
 import type { UpdateBoardInput } from "@kan/api/types";
 
+import type {
+  BoardSortBy,
+  BoardSortDirection,
+} from "./components/BoardSortDropdown";
 import type { CardPriority } from "./components/Card";
 import type { CardContextMenuAction } from "./components/CardContextMenu";
 import Button from "~/components/Button";
@@ -37,6 +41,7 @@ import { api } from "~/utils/api";
 import { formatToArray } from "~/utils/helpers";
 import { DeleteCardConfirmation } from "~/views/card/components/DeleteCardConfirmation";
 import BoardDropdown from "./components/BoardDropdown";
+import { BoardSortDropdown } from "./components/BoardSortDropdown";
 import Card from "./components/Card";
 import { CardContextDueDateModal } from "./components/CardContextDueDateModal";
 import { CardContextDuplicateModal } from "./components/CardContextDuplicateModal";
@@ -51,8 +56,6 @@ import List from "./components/List";
 import { NewCardForm } from "./components/NewCardForm";
 import { NewListForm } from "./components/NewListForm";
 import { NewTemplateForm } from "./components/NewTemplateForm";
-import UpdateBoardSlugButton from "./components/UpdateBoardSlugButton";
-import { UpdateBoardSlugForm } from "./components/UpdateBoardSlugForm";
 import VisibilityButton from "./components/VisibilityButton";
 
 type PublicListId = string;
@@ -67,10 +70,36 @@ const isEditableTarget = (target: EventTarget | null) => {
 };
 
 const priorityCycle = [null, "urgent", "high", "medium", "low"] as const;
+const sortablePriorityRank: Record<CardPriority, number> = {
+  urgent: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
 
 const getNextPriority = (priority: CardPriority | null) => {
   const currentIndex = priorityCycle.indexOf(priority);
   return priorityCycle[(currentIndex + 1) % priorityCycle.length] ?? null;
+};
+
+const getSingleQueryValue = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
+
+const getBoardSortBy = (
+  value: string | string[] | undefined,
+): BoardSortBy | null => {
+  const sortBy = getSingleQueryValue(value);
+  if (sortBy === "labels" || sortBy === "createdAt" || sortBy === "priority") {
+    return sortBy;
+  }
+
+  return null;
+};
+
+const getBoardSortDirection = (
+  value: string | string[] | undefined,
+): BoardSortDirection => {
+  return getSingleQueryValue(value) === "desc" ? "desc" : "asc";
 };
 
 export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
@@ -152,6 +181,9 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     type: boardType,
   };
 
+  const sortBy = getBoardSortBy(router.query.sortBy);
+  const sortDirection = getBoardSortDirection(router.query.sortDirection);
+
   const {
     data: boardData,
     isSuccess,
@@ -185,6 +217,62 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   }, [boardId]);
 
   const isLoading = isInitialLoading || isQueryLoading;
+
+  const sortedBoardData = useMemo(() => {
+    if (!boardData || !sortBy) return boardData;
+
+    const direction = sortDirection === "asc" ? 1 : -1;
+    type BoardCard = (typeof boardData.lists)[number]["cards"][number];
+
+    const getLabelsValue = (card: BoardCard) =>
+      card.labels
+        .map((label) => label.name.toLowerCase())
+        .sort((a, b) => a.localeCompare(b))
+        .join(" ");
+
+    const compareBySort = (cardA: BoardCard, cardB: BoardCard) => {
+      if (sortBy === "labels") {
+        const hasLabelsA = cardA.labels.length > 0;
+        const hasLabelsB = cardB.labels.length > 0;
+
+        if (hasLabelsA !== hasLabelsB) return hasLabelsA ? -1 : 1;
+
+        const comparison = getLabelsValue(cardA).localeCompare(
+          getLabelsValue(cardB),
+        );
+        if (comparison !== 0) return comparison * direction;
+      }
+
+      if (sortBy === "createdAt") {
+        const comparison =
+          new Date(cardA.createdAt).getTime() -
+          new Date(cardB.createdAt).getTime();
+        if (comparison !== 0) return comparison * direction;
+      }
+
+      if (sortBy === "priority") {
+        const hasPriorityA = cardA.priority !== null;
+        const hasPriorityB = cardB.priority !== null;
+
+        if (hasPriorityA !== hasPriorityB) return hasPriorityA ? -1 : 1;
+
+        const comparison =
+          (cardA.priority ? sortablePriorityRank[cardA.priority] : 0) -
+          (cardB.priority ? sortablePriorityRank[cardB.priority] : 0);
+        if (comparison !== 0) return comparison * direction;
+      }
+
+      return cardA.index - cardB.index;
+    };
+
+    return {
+      ...boardData,
+      lists: boardData.lists.map((list) => ({
+        ...list,
+        cards: [...list.cards].sort(compareBySort),
+      })),
+    };
+  }, [boardData, sortBy, sortDirection]);
 
   useScrollRestore(
     boardId,
@@ -367,7 +455,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
   const boardCards = useMemo(
     () =>
-      boardData?.lists.flatMap((list, listIndex) =>
+      sortedBoardData?.lists.flatMap((list, listIndex) =>
         list.cards.map((card, cardIndex) => ({
           card,
           list,
@@ -375,7 +463,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
           cardIndex,
         })),
       ) ?? [],
-    [boardData],
+    [sortedBoardData],
   );
 
   const selectedCardInfo =
@@ -402,6 +490,33 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       selectedCardInfo?.list.publicId,
       selectedPublicListId,
     ],
+  );
+
+  const updateSort = useCallback(
+    async (
+      nextSortBy: BoardSortBy | null,
+      nextDirection: BoardSortDirection,
+    ) => {
+      const nextQuery = { ...router.query };
+
+      if (nextSortBy) {
+        nextQuery.sortBy = nextSortBy;
+        nextQuery.sortDirection = nextDirection;
+      } else {
+        delete nextQuery.sortBy;
+        delete nextQuery.sortDirection;
+      }
+
+      try {
+        await router.push({
+          pathname: router.pathname,
+          query: nextQuery,
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [router],
   );
 
   useEffect(() => {
@@ -789,18 +904,6 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
         <Modal
           modalSize="sm"
-          isVisible={isOpen && modalContentType === "UPDATE_BOARD_SLUG"}
-        >
-          <UpdateBoardSlugForm
-            boardPublicId={boardId ?? ""}
-            workspaceSlug={workspace.slug ?? ""}
-            boardSlug={boardData?.slug ?? ""}
-            queryParams={queryParams}
-          />
-        </Modal>
-
-        <Modal
-          modalSize="sm"
           isVisible={isOpen && modalContentType === "CREATE_TEMPLATE"}
         >
           <NewTemplateForm
@@ -907,15 +1010,6 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
             )}
             {!isTemplate && (
               <>
-                <UpdateBoardSlugButton
-                  handleOnClick={() => openModal("UPDATE_BOARD_SLUG")}
-                  isLoading={isLoading}
-                  workspaceSlug={workspace.slug ?? ""}
-                  boardSlug={boardData?.slug ?? ""}
-                  boardPublicId={boardId ?? ""}
-                  visibility={boardData?.visibility ?? "private"}
-                  canEdit={canEditBoard}
-                />
                 <VisibilityButton
                   visibility={boardData?.visibility ?? "private"}
                   boardPublicId={boardId ?? ""}
@@ -935,6 +1029,12 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                     isLoading={!boardData}
                   />
                 )}
+                <BoardSortDropdown
+                  sortBy={sortBy}
+                  direction={sortDirection}
+                  isLoading={!boardData}
+                  onChange={updateSort}
+                />
               </>
             )}
             <Tooltip
@@ -979,9 +1079,9 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
               <div className="0 mr-5 h-[275px] w-[18rem] animate-pulse rounded-md bg-light-200 dark:bg-dark-100" />
               <div className="0 mr-5 h-[375px] w-[18rem] animate-pulse rounded-md bg-light-200 dark:bg-dark-100" />
             </div>
-          ) : boardData ? (
+          ) : sortedBoardData ? (
             <>
-              {boardData.lists.length === 0 ? (
+              {sortedBoardData.lists.length === 0 ? (
                 <div className="z-10 flex h-full w-full flex-col items-center justify-center space-y-8 pb-[150px]">
                   <div className="flex flex-col items-center">
                     <HiOutlineSquare3Stack3D className="h-10 w-10 text-light-800 dark:text-dark-800" />
@@ -1023,7 +1123,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                         {...provided.droppableProps}
                       >
                         <div className="min-w-[2rem]" />
-                        {boardData.lists.map((list, index) => (
+                        {sortedBoardData.lists.map((list, index) => (
                           <List
                             index={index}
                             key={list.publicId}
@@ -1048,7 +1148,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                       key={card.publicId}
                                       draggableId={card.publicId}
                                       index={index}
-                                      isDragDisabled={!canEditCard}
+                                      isDragDisabled={!canEditCard || !!sortBy}
                                     >
                                       {(provided) => (
                                         <div
