@@ -42,6 +42,7 @@ const Card = ({
   priority,
   isSelected,
   canEdit,
+  disableInlineEditing = false,
   onSelect,
   onUpdate,
 }: {
@@ -70,6 +71,7 @@ const Card = ({
   priority: CardPriority | null;
   isSelected: boolean;
   canEdit: boolean;
+  disableInlineEditing?: boolean;
   onSelect: () => void;
   onUpdate: (values: {
     title?: string;
@@ -101,6 +103,7 @@ const Card = ({
   const hasDescription = descriptionText.length > 0;
   const hasAttachments = attachments && attachments.length > 0;
   const hasDueDate = !!dueDate;
+  const canInlineEdit = canEdit && !disableInlineEditing;
 
   useEffect(() => {
     if (!isEditingTitle) setDraftTitle(title);
@@ -160,7 +163,7 @@ const Card = ({
         )}
       </div>
 
-      {isEditingTitle && canEdit ? (
+      {isEditingTitle && canInlineEdit ? (
         <input
           value={draftTitle}
           autoFocus
@@ -182,7 +185,7 @@ const Card = ({
         <button
           type="button"
           onClick={(event) => {
-            if (!canEdit) return;
+            if (!canInlineEdit) return;
             event.stopPropagation();
             setDraftTitle(title);
             setIsEditingTitle(true);
@@ -195,7 +198,7 @@ const Card = ({
 
       {(isSelected || hasDescription || isEditingDescription) && (
         <div className="mt-1">
-          {isEditingDescription && canEdit ? (
+          {isEditingDescription && canInlineEdit ? (
             <textarea
               value={draftDescription}
               autoFocus
@@ -217,7 +220,7 @@ const Card = ({
             <button
               type="button"
               onClick={(event) => {
-                if (!canEdit) return;
+                if (!canInlineEdit) return;
                 event.stopPropagation();
                 setDraftDescription(descriptionText);
                 setIsEditingDescription(true);

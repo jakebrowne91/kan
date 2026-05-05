@@ -8,9 +8,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DragDropContext, Draggable } from "react-beautiful-dnd";
 import { useForm } from "react-hook-form";
 import {
+  HiMiniXMark,
+  HiOutlineArrowRightCircle,
+  HiOutlineFlag,
+  HiOutlinePencilSquare,
   HiOutlinePlusSmall,
   HiOutlineRectangleStack,
   HiOutlineSquare3Stack3D,
+  HiOutlineTag,
 } from "react-icons/hi2";
 
 import type { UpdateBoardInput } from "@kan/api/types";
@@ -69,6 +74,15 @@ const isEditableTarget = (target: EventTarget | null) => {
   );
 };
 
+const isFormEditingTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(
+    target.closest(
+      'input, textarea, select, a, [contenteditable="true"], [role="dialog"]',
+    ),
+  );
+};
+
 const priorityCycle = [null, "urgent", "high", "medium", "low"] as const;
 const sortablePriorityRank: Record<CardPriority, number> = {
   urgent: 4,
@@ -117,6 +131,10 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   >(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isManualOrdering, setIsManualOrdering] = useState(false);
+  const [isMobileBoard, setIsMobileBoard] = useState(false);
+  const [mobileCardMenuPublicId, setMobileCardMenuPublicId] = useState<
+    string | null
+  >(null);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -517,6 +535,10 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     boardCards.find(({ card }) => card.publicId === selectedCardPublicId) ??
     null;
 
+  const mobileCardMenuInfo =
+    boardCards.find(({ card }) => card.publicId === mobileCardMenuPublicId) ??
+    null;
+
   const openNewCardForm = useCallback(
     (preferredListPublicId?: string) => {
       if (!canCreateCard) return;
@@ -614,6 +636,24 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       setSelectedCardPublicId(null);
     }
   }, [boardCards, selectedCardPublicId]);
+
+  useEffect(() => {
+    if (
+      mobileCardMenuPublicId &&
+      !boardCards.some(({ card }) => card.publicId === mobileCardMenuPublicId)
+    ) {
+      setMobileCardMenuPublicId(null);
+    }
+  }, [boardCards, mobileCardMenuPublicId]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const updateMobileState = () => setIsMobileBoard(mediaQuery.matches);
+
+    updateMobileState();
+    mediaQuery.addEventListener("change", updateMobileState);
+    return () => mediaQuery.removeEventListener("change", updateMobileState);
+  }, []);
 
   const openCard = useCallback(
     (cardPublicId: string) => {
@@ -724,7 +764,8 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isOpen || isEditableTarget(event.target)) return;
+      if (isOpen || mobileCardMenuPublicId || isEditableTarget(event.target))
+        return;
 
       const key = event.key.toLowerCase();
 
@@ -811,6 +852,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     canEditCard,
     deleteCardMutation,
     isOpen,
+    mobileCardMenuPublicId,
     moveSelectedCardAcrossLists,
     moveSelectedCardToDone,
     moveSelection,
@@ -880,6 +922,39 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
             ? "CARD_CONTEXT_LABELS"
             : "CARD_CONTEXT_DUE_DATE";
     openModal(modalType, cardPublicId);
+  };
+
+  const closeMobileCardMenu = () => setMobileCardMenuPublicId(null);
+
+  const handleMobileCardAction = (
+    action: "move" | "labels" | "priority" | "edit",
+  ) => {
+    if (!mobileCardMenuInfo) return;
+
+    const cardPublicId = mobileCardMenuInfo.card.publicId;
+    closeMobileCardMenu();
+
+    if (action === "edit") {
+      openCard(cardPublicId);
+      return;
+    }
+
+    if (!canEditCard || cardPublicId.startsWith("PLACEHOLDER")) return;
+
+    if (action === "move") {
+      openModal("CARD_CONTEXT_MOVE_LIST", cardPublicId);
+      return;
+    }
+
+    if (action === "labels") {
+      openModal("CARD_CONTEXT_LABELS", cardPublicId);
+      return;
+    }
+
+    updateCardMutation.mutate({
+      cardPublicId,
+      priority: getNextPriority(mobileCardMenuInfo.card.priority),
+    });
   };
 
   const onDragEnd = ({
@@ -1060,7 +1135,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       />
       <div className="relative flex h-full min-h-0 flex-col">
         <PatternedBackground />
-        <div className="sticky top-0 z-20 flex w-full flex-col gap-3 bg-light-50/95 p-4 backdrop-blur dark:bg-dark-50/95 md:relative md:flex-row md:justify-between md:bg-transparent md:p-8 md:backdrop-blur-none md:dark:bg-transparent">
+        <div className="bg-light-50/95 dark:bg-dark-50/95 sticky top-0 z-20 flex w-full flex-col gap-3 p-4 backdrop-blur md:relative md:flex-row md:justify-between md:bg-transparent md:p-8 md:backdrop-blur-none md:dark:bg-transparent">
           {isLoading && !boardData && (
             <div className="flex space-x-2">
               <div className="h-[2.3rem] w-[150px] animate-pulse rounded-[5px] bg-light-200 dark:bg-dark-100" />
@@ -1253,6 +1328,21 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                             )
                                               return;
                                             if (
+                                              isMobileBoard &&
+                                              !isFormEditingTarget(e.target)
+                                            ) {
+                                              setSelectedCardPublicId(
+                                                card.publicId,
+                                              );
+                                              setSelectedPublicListId(
+                                                list.publicId,
+                                              );
+                                              setMobileCardMenuPublicId(
+                                                card.publicId,
+                                              );
+                                              return;
+                                            }
+                                            if (
                                               canEditCard &&
                                               isEditableTarget(e.target)
                                             )
@@ -1332,6 +1422,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                                 ...values,
                                               });
                                             }}
+                                            disableInlineEditing={isMobileBoard}
                                           />
                                         </div>
                                       )}
@@ -1361,6 +1452,79 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
             onAction={handleCardContextMenuAction}
             canEdit={!!canEditCard}
           />
+        )}
+        {mobileCardMenuInfo && (
+          <div
+            className="fixed inset-0 z-[180] bg-black/35 md:hidden"
+            role="dialog"
+            aria-modal="true"
+            onClick={closeMobileCardMenu}
+          >
+            <div
+              className="absolute inset-x-0 bottom-0 rounded-t-xl border-t border-light-400 bg-light-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl dark:border-dark-500 dark:bg-dark-100"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {mobileCardMenuInfo.card.cardNumber != null && (
+                    <p className="mb-1 text-xs font-medium text-light-800 dark:text-dark-800">
+                      {sortedBoardData?.workspace.cardPrefix}-
+                      {mobileCardMenuInfo.card.cardNumber}
+                    </p>
+                  )}
+                  <h2 className="line-clamp-2 text-base font-semibold text-neutral-900 dark:text-dark-1000">
+                    {mobileCardMenuInfo.card.title}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  aria-label={t`Close`}
+                  onClick={closeMobileCardMenu}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-light-900 hover:bg-light-200 dark:text-dark-900 dark:hover:bg-dark-200"
+                >
+                  <HiMiniXMark className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  disabled={!canEditCard}
+                  onClick={() => handleMobileCardAction("move")}
+                  className="flex min-h-12 w-full items-center gap-3 rounded-md border border-light-400 bg-light-100 px-3 text-left text-sm font-semibold text-neutral-900 disabled:opacity-50 dark:border-dark-400 dark:bg-dark-200 dark:text-dark-1000"
+                >
+                  <HiOutlineArrowRightCircle className="h-5 w-5 text-light-900 dark:text-dark-900" />
+                  {t`Move list`}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canEditCard}
+                  onClick={() => handleMobileCardAction("labels")}
+                  className="flex min-h-12 w-full items-center gap-3 rounded-md border border-light-400 bg-light-100 px-3 text-left text-sm font-semibold text-neutral-900 disabled:opacity-50 dark:border-dark-400 dark:bg-dark-200 dark:text-dark-1000"
+                >
+                  <HiOutlineTag className="h-5 w-5 text-light-900 dark:text-dark-900" />
+                  {t`Add label`}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canEditCard}
+                  onClick={() => handleMobileCardAction("priority")}
+                  className="flex min-h-12 w-full items-center gap-3 rounded-md border border-light-400 bg-light-100 px-3 text-left text-sm font-semibold text-neutral-900 disabled:opacity-50 dark:border-dark-400 dark:bg-dark-200 dark:text-dark-1000"
+                >
+                  <HiOutlineFlag className="h-5 w-5 text-light-900 dark:text-dark-900" />
+                  {t`Change priority`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMobileCardAction("edit")}
+                  className="flex min-h-12 w-full items-center gap-3 rounded-md bg-neutral-900 px-3 text-left text-sm font-semibold text-white dark:bg-dark-1000 dark:text-dark-50"
+                >
+                  <HiOutlinePencilSquare className="h-5 w-5" />
+                  {t`Edit`}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
         {renderModalContent()}
       </div>
