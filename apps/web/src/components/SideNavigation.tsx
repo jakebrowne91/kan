@@ -18,14 +18,10 @@ import { hasActiveSubscription } from "@kan/shared/utils";
 import type { KeyboardShortcut } from "~/providers/keyboard-shortcuts";
 import boardsIconDark from "~/assets/boards-dark.json";
 import boardsIconLight from "~/assets/boards-light.json";
-import membersIconDark from "~/assets/members-dark.json";
-import membersIconLight from "~/assets/members-light.json";
 import notesIconDark from "~/assets/comments-dark.json";
 import notesIconLight from "~/assets/comments-light.json";
 import settingsIconDark from "~/assets/settings-dark.json";
 import settingsIconLight from "~/assets/settings-light.json";
-import templatesIconDark from "~/assets/templates-dark.json";
-import templatesIconLight from "~/assets/templates-light.json";
 import { BrandLogo } from "~/components/BrandLogo";
 import ButtonComponent from "~/components/Button";
 import ReactiveButton from "~/components/ReactiveButton";
@@ -111,18 +107,6 @@ export default function SideNavigation({
       },
     },
     {
-      name: t`Templates`,
-      href: "/templates",
-      icon: isDarkMode ? templatesIconDark : templatesIconLight,
-      keyboardShortcut: {
-        type: "SEQUENCE",
-        strokes: [{ key: "G" }, { key: "T" }],
-        action: () => void router.push("/templates"),
-        group: "NAVIGATION",
-        description: t`Go to templates`,
-      },
-    },
-    {
       name: t`Notes`,
       href: "/notes",
       icon: isDarkMode ? notesIconDark : notesIconLight,
@@ -132,18 +116,6 @@ export default function SideNavigation({
         action: () => void router.push("/notes"),
         group: "NAVIGATION",
         description: t`Go to notes`,
-      },
-    },
-    {
-      name: t`Members`,
-      href: "/members",
-      icon: isDarkMode ? membersIconDark : membersIconLight,
-      keyboardShortcut: {
-        type: "SEQUENCE",
-        strokes: [{ key: "G" }, { key: "M" }],
-        action: () => void router.push("/members"),
-        group: "NAVIGATION",
-        description: t`Go to members`,
       },
     },
     {
