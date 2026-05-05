@@ -335,11 +335,11 @@ function NotesMarkdownEditor({
   }, [editor, value]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex flex-col">
       <div className="shrink-0 border-b border-light-300 px-5 py-2 dark:border-dark-300 md:px-6">
         <NotesMarkdownToolbar editor={editor} />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto bg-light-50 dark:bg-dark-50">
+      <div className="bg-light-50 dark:bg-dark-50">
         <style jsx global>{`
           .notes-markdown-editor .tiptap {
             color: inherit;
@@ -664,10 +664,10 @@ const NotesView = () => {
             </div>
           </aside>
 
-          <main className="flex h-full min-h-0 overflow-hidden">
+          <main className="h-full min-h-0 overflow-y-auto">
             {selectedNote ? (
-              <div className="flex h-full min-h-0 flex-1 flex-col">
-                <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex min-h-full flex-col">
+                <section className="flex min-h-full flex-col">
                   <div className="flex shrink-0 items-center gap-2 border-b border-light-300 px-5 py-3 dark:border-dark-300">
                     <HiOutlineDocumentText className="h-5 w-5 text-light-900 dark:text-dark-900" />
                     <input
