@@ -15,6 +15,7 @@ import { useClickOutside } from "~/hooks/useClickOutside";
 import { useModal } from "~/providers/modal";
 import { useWorkspace, WorkspaceProvider } from "~/providers/workspace";
 import { api } from "~/utils/api";
+import { BrandLogo } from "./BrandLogo";
 import SideNavigation from "./SideNavigation";
 
 interface DashboardProps {
@@ -128,6 +129,7 @@ export default function Dashboard({
             ref={sideNavButtonRef}
             onClick={toggleSideNav}
             className="rounded p-1.5 transition-all hover:bg-light-200 dark:hover:bg-dark-100"
+            aria-label={isSideNavOpen ? "Close navigation" : "Open navigation"}
           >
             {isSideNavOpen ? (
               <TbLayoutSidebarLeftCollapse
@@ -142,11 +144,14 @@ export default function Dashboard({
             )}
           </button>
 
-          {hasRightPanel && (
+          <BrandLogo className="h-5 w-auto" />
+
+          {hasRightPanel ? (
             <button
               ref={rightPanelButtonRef}
               onClick={toggleRightPanel}
               className="rounded p-1.5 transition-all hover:bg-light-200 dark:hover:bg-dark-100"
+              aria-label={isRightPanelOpen ? "Close details" : "Open details"}
             >
               {isRightPanelOpen ? (
                 <TbLayoutSidebarRightCollapse
@@ -160,10 +165,12 @@ export default function Dashboard({
                 />
               )}
             </button>
+          ) : (
+            <div className="h-8 w-8" />
           )}
         </div>
 
-        <div className="flex h-[calc(100dvh-4.5rem)] min-h-0 w-full md:h-[calc(100dvh-1.5rem)]">
+        <div className="flex h-[calc(100dvh-3rem)] min-h-0 w-full md:h-[calc(100dvh-1.5rem)]">
           <div
             ref={sideNavRef}
             className={`fixed top-12 z-40 h-[calc(100dvh-3rem)] w-[calc(100vw-1.5rem)] transform transition-transform duration-300 ease-in-out md:relative md:top-0 md:h-full md:w-auto md:translate-x-0 ${isSideNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} `}

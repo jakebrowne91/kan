@@ -1058,9 +1058,9 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       <PageHead
         title={`${boardData?.name ?? (isTemplate ? t`Board` : t`Template`)} | ${workspace.name ?? t`Workspace`}`}
       />
-      <div className="relative flex h-full flex-col">
+      <div className="relative flex h-full min-h-0 flex-col">
         <PatternedBackground />
-        <div className="z-10 flex w-full flex-col justify-between p-6 md:flex-row md:p-8">
+        <div className="sticky top-0 z-20 flex w-full flex-col gap-3 border-b border-light-300/80 bg-light-50/95 p-4 backdrop-blur dark:border-dark-300/80 dark:bg-dark-50/95 md:relative md:flex-row md:justify-between md:border-b-0 md:bg-transparent md:p-8 md:backdrop-blur-none md:dark:bg-transparent">
           {isLoading && !boardData && (
             <div className="flex space-x-2">
               <div className="h-[2.3rem] w-[150px] animate-pulse rounded-[5px] bg-light-200 dark:bg-dark-100" />
@@ -1069,7 +1069,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
           {boardData && (
             <form
               onSubmit={handleSubmit(onSubmit)}
-              className="order-2 focus-visible:outline-none md:order-1"
+              className="min-w-0 focus-visible:outline-none"
             >
               <input
                 id="name"
@@ -1077,16 +1077,16 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                 {...register("name")}
                 onBlur={canEditBoard ? handleSubmit(onSubmit) : undefined}
                 readOnly={!canEditBoard}
-                className="block border-0 bg-transparent p-0 py-0 font-bold leading-[2.3rem] tracking-tight text-neutral-900 focus:ring-0 focus-visible:outline-none disabled:cursor-not-allowed dark:text-dark-1000 sm:text-[1.2rem]"
+                className="block w-full truncate border-0 bg-transparent p-0 py-0 text-lg font-bold leading-8 tracking-tight text-neutral-900 focus:ring-0 focus-visible:outline-none disabled:cursor-not-allowed dark:text-dark-1000 sm:text-[1.2rem] md:leading-[2.3rem]"
               />
             </form>
           )}
           {!boardData && !isLoading && (
-            <p className="order-2 block p-0 py-0 font-bold leading-[2.3rem] tracking-tight text-neutral-900 dark:text-dark-1000 sm:text-[1.2rem] md:order-1">
+            <p className="block p-0 py-0 font-bold leading-[2.3rem] tracking-tight text-neutral-900 dark:text-dark-1000 sm:text-[1.2rem]">
               {t`${isTemplate ? "Template" : "Board"} not found`}
             </p>
           )}
-          <div className="order-1 mb-4 flex items-center justify-end space-x-2 md:order-2 md:mb-0">
+          <div className="flex flex-wrap items-center gap-2 md:justify-end">
             {isTemplate && (
               <div className="inline-flex cursor-default items-center justify-center whitespace-nowrap rounded-md border-[1px] border-light-300 bg-light-50 px-3 py-2 text-sm font-semibold text-light-950 shadow-sm dark:border-dark-300 dark:bg-dark-50 dark:text-dark-950">
                 <span className="mr-2">
@@ -1124,6 +1124,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
               }
             >
               <Button
+                size="sm"
                 iconLeft={
                   <HiOutlinePlusSmall
                     className="-mr-0.5 h-5 w-5"
@@ -1152,13 +1153,13 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         <div
           ref={scrollRef}
           onMouseDown={onMouseDown}
-          className={`scrollbar-w-none scrollbar-track-rounded-[4px] scrollbar-thumb-rounded-[4px] scrollbar-h-[8px] z-0 flex-1 overflow-y-hidden overflow-x-scroll overscroll-contain scrollbar scrollbar-track-light-200 scrollbar-thumb-light-400 dark:scrollbar-track-dark-100 dark:scrollbar-thumb-dark-300`}
+          className={`scrollbar-w-none scrollbar-track-rounded-[4px] scrollbar-thumb-rounded-[4px] scrollbar-h-[8px] z-0 flex-1 snap-x snap-mandatory overflow-y-hidden overflow-x-scroll overscroll-contain px-4 pb-4 scrollbar scrollbar-track-light-200 scrollbar-thumb-light-400 dark:scrollbar-track-dark-100 dark:scrollbar-thumb-dark-300 md:px-0 md:pb-0`}
         >
           {isLoading ? (
-            <div className="ml-[2rem] flex">
-              <div className="0 mr-5 h-[500px] w-[18rem] animate-pulse rounded-md bg-light-200 dark:bg-dark-100" />
-              <div className="0 mr-5 h-[275px] w-[18rem] animate-pulse rounded-md bg-light-200 dark:bg-dark-100" />
-              <div className="0 mr-5 h-[375px] w-[18rem] animate-pulse rounded-md bg-light-200 dark:bg-dark-100" />
+            <div className="flex md:ml-[2rem]">
+              <div className="0 mr-3 h-[500px] w-[calc(100vw-2rem)] animate-pulse rounded-md bg-light-200 dark:bg-dark-100 sm:w-[22rem] md:mr-5 md:w-[18rem]" />
+              <div className="0 mr-3 h-[275px] w-[calc(100vw-2rem)] animate-pulse rounded-md bg-light-200 dark:bg-dark-100 sm:w-[22rem] md:mr-5 md:w-[18rem]" />
+              <div className="0 mr-3 h-[375px] w-[calc(100vw-2rem)] animate-pulse rounded-md bg-light-200 dark:bg-dark-100 sm:w-[22rem] md:mr-5 md:w-[18rem]" />
             </div>
           ) : sortedBoardData ? (
             <>
@@ -1206,7 +1207,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                         ref={provided.innerRef}
                         {...provided.droppableProps}
                       >
-                        <div className="min-w-[2rem]" />
+                        <div className="min-w-0 md:min-w-[2rem]" />
                         {sortedBoardData.lists.map((list, index) => (
                           <List
                             index={index}
@@ -1225,7 +1226,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                                 <div
                                   ref={provided.innerRef}
                                   {...provided.droppableProps}
-                                  className="scrollbar-track-rounded-[4px] scrollbar-thumb-rounded-[4px] scrollbar-w-[8px] z-10 h-full max-h-[calc(100vh-225px)] min-h-[2rem] overflow-y-auto pr-1 scrollbar dark:scrollbar-track-dark-100 dark:scrollbar-thumb-dark-600"
+                                  className="scrollbar-track-rounded-[4px] scrollbar-thumb-rounded-[4px] scrollbar-w-[8px] z-10 h-full max-h-[calc(100dvh-10.5rem)] min-h-[2rem] overflow-y-auto pr-1 scrollbar dark:scrollbar-track-dark-100 dark:scrollbar-thumb-dark-600 md:max-h-[calc(100vh-225px)]"
                                 >
                                   {list.cards.map((card, index) => (
                                     <Draggable
