@@ -95,24 +95,25 @@ const getStructuredContent = (response: unknown) => {
 };
 
 const getString = (value: unknown, keys: string[]): string | null => {
-  if (!value || typeof value !== "object") return null;
-
-  const record = value as Record<string, unknown>;
-
   for (const key of keys) {
-    const direct = record[key];
-    if (typeof direct === "string" && direct.length > 0) return direct;
+    let current = value;
 
-    const [parent, child] = key.split(".");
-    if (!parent || !child) continue;
-
-    const nested = record[parent];
-    if (nested && typeof nested === "object") {
-      const nestedValue = (nested as Record<string, unknown>)[child];
-      if (typeof nestedValue === "string" && nestedValue.length > 0) {
-        return nestedValue;
+    for (const segment of key.split(".")) {
+      if (Array.isArray(current)) {
+        current = current[Number(segment)];
+        continue;
       }
+
+      if (current && typeof current === "object") {
+        current = (current as Record<string, unknown>)[segment];
+        continue;
+      }
+
+      current = null;
+      break;
     }
+
+    if (typeof current === "string" && current.length > 0) return current;
   }
 
   return null;
@@ -128,11 +129,15 @@ const buildCreateWorkspaceArgs = (
   return {
     deviceId: config.deviceId,
     projectId: config.projectId,
-    name: input.workspaceName,
-    branch: input.branch,
-    ...(config.sourceWorkspaceId
-      ? { sourceWorkspaceId: config.sourceWorkspaceId }
-      : {}),
+    workspaces: [
+      {
+        name: input.workspaceName,
+        branchName: input.branch,
+        ...(config.sourceWorkspaceId
+          ? { sourceWorkspaceId: config.sourceWorkspaceId }
+          : {}),
+      },
+    ],
   };
 };
 
@@ -141,6 +146,7 @@ const buildStartAgentArgs = (
   workspaceId: string,
   input: LaunchAgentInput,
 ) => ({
+  deviceId: config.deviceId,
   workspaceId,
   agent: config.agent,
   prompt: input.prompt,
@@ -198,6 +204,8 @@ export const launchSupersetAgent = async (
   const { client, transport } = await createClient(config);
 
   try {
+    if (!config.deviceId) throw new Error("SUPERSET_DEVICE_ID is not configured");
+
     let workspaceId = config.workspaceId;
     let createWorkspaceResponse: unknown = null;
 
@@ -211,6 +219,7 @@ export const launchSupersetAgent = async (
         "workspaceId",
         "id",
         "workspace.id",
+        "workspaces.0.id",
       ]);
 
       if (!workspaceId) {
