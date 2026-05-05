@@ -335,7 +335,7 @@ function NotesMarkdownEditor({
   }, [editor, value]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 border-b border-light-300 px-5 py-2 dark:border-dark-300 md:px-6">
         <NotesMarkdownToolbar editor={editor} />
       </div>
@@ -607,7 +607,7 @@ const NotesView = () => {
           </Button>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[290px_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[290px_minmax(0,1fr)]">
           <aside className="flex min-h-0 flex-col border-b border-light-300 dark:border-dark-300 md:border-b-0 md:border-r">
             <div className="p-3">
               <div className="relative">
@@ -664,10 +664,10 @@ const NotesView = () => {
             </div>
           </aside>
 
-          <main className="min-h-0 overflow-hidden">
+          <main className="flex h-full min-h-0 overflow-hidden">
             {selectedNote ? (
-              <div className="flex min-h-full flex-col">
-                <section className="flex min-h-[520px] flex-1 flex-col">
+              <div className="flex h-full min-h-0 flex-1 flex-col">
+                <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <div className="flex shrink-0 items-center gap-2 border-b border-light-300 px-5 py-3 dark:border-dark-300">
                     <HiOutlineDocumentText className="h-5 w-5 text-light-900 dark:text-dark-900" />
                     <input
