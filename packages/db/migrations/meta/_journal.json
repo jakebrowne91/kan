@@ -253,6 +253,13 @@
       "when": 1777968900000,
       "tag": "20260505081500_AddCardAgentRuns",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1777982400000,
+      "tag": "20260505120000_AddNotes",
+      "breakpoints": true
     }
   ]
 }
