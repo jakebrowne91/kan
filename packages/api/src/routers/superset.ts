@@ -9,8 +9,8 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { assertCanEdit } from "../utils/permissions";
 import {
   buildSupersetPrompt,
-  listSupersetProjects,
   launchSupersetAgent,
+  listSupersetProjects,
   toSupersetBranchName,
 } from "../utils/superset";
 

@@ -1,23 +1,13 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-
-const DEFAULT_MCP_URL = "https://api.superset.sh/api/agent/mcp";
-
-type ToolResponse = {
-  structuredContent?: unknown;
-  content?: Array<{ type: string; text?: string }>;
-};
+import type { AgentConfig } from "@superset_sh/sdk";
+import Superset from "@superset_sh/sdk";
 
 type SupersetConfig = {
   apiKey: string;
-  mcpUrl: string;
+  organizationId: string;
   agent: string;
-  workspaceId: string | null;
-  deviceId: string | null;
+  hostId: string | null;
   projectId: string | null;
-  sourceWorkspaceId: string | null;
-  createWorkspaceTool: string;
-  startAgentTool: string;
+  agentConfig: AgentConfig | null;
 };
 
 type LaunchAgentInput = {
@@ -54,180 +44,101 @@ const requireEnv = (key: string) => {
 
 const optionalEnv = (key: string) => process.env[key]?.trim() || null;
 
-const getConfig = (): SupersetConfig => ({
-  apiKey: requireEnv("SUPERSET_API_KEY"),
-  mcpUrl: process.env.SUPERSET_MCP_URL?.trim() || DEFAULT_MCP_URL,
-  agent: process.env.SUPERSET_AGENT?.trim() || "codex",
-  workspaceId: optionalEnv("SUPERSET_WORKSPACE_ID"),
-  deviceId: optionalEnv("SUPERSET_DEVICE_ID"),
-  projectId: optionalEnv("SUPERSET_PROJECT_ID"),
-  sourceWorkspaceId: optionalEnv("SUPERSET_SOURCE_WORKSPACE_ID"),
-  createWorkspaceTool:
-    process.env.SUPERSET_CREATE_WORKSPACE_TOOL?.trim() || "create_workspace",
-  startAgentTool:
-    process.env.SUPERSET_START_AGENT_TOOL?.trim() ||
-    "start_agent_session_with_prompt",
-});
+const getOptionalObjectString = (value: unknown, key: string) => {
+  if (!value || typeof value !== "object") return null;
 
-const createClient = async (config: SupersetConfig) => {
-  const client = new Client({
-    name: "kan-superset-integration",
-    version: "0.1.0",
-  });
-  const transport = new StreamableHTTPClientTransport(new URL(config.mcpUrl), {
-    requestInit: {
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-    },
-  });
-
-  await client.connect(transport);
-
-  return { client, transport };
+  const property = (value as Record<string, unknown>)[key];
+  return typeof property === "string" && property.trim().length
+    ? property.trim()
+    : null;
 };
 
-const getStructuredContent = (response: unknown) => {
-  const toolResponse = response as ToolResponse;
+const parseAgentConfig = (): AgentConfig | null => {
+  const raw = optionalEnv("SUPERSET_AGENT_CONFIG_JSON");
+  if (!raw) return null;
 
-  if (toolResponse.structuredContent) return toolResponse.structuredContent;
-
-  const text = toolResponse.content?.find((item) => item.type === "text")?.text;
-  if (!text) return response;
-
+  let parsed: unknown;
   try {
-    return JSON.parse(text);
+    parsed = JSON.parse(raw);
   } catch {
-    return { text };
-  }
-};
-
-const getString = (value: unknown, keys: string[]): string | null => {
-  for (const key of keys) {
-    let current = value;
-
-    for (const segment of key.split(".")) {
-      if (Array.isArray(current)) {
-        current = current[Number(segment)];
-        continue;
-      }
-
-      if (current && typeof current === "object") {
-        current = (current as Record<string, unknown>)[segment];
-        continue;
-      }
-
-      current = null;
-      break;
-    }
-
-    if (typeof current === "string" && current.length > 0) return current;
+    throw new Error("SUPERSET_AGENT_CONFIG_JSON must be valid JSON");
   }
 
-  return null;
-};
-
-const getRecordArray = (value: unknown, keys: string[]) => {
-  for (const key of keys) {
-    let current = value;
-
-    for (const segment of key.split(".")) {
-      if (Array.isArray(current)) {
-        current = current[Number(segment)];
-        continue;
-      }
-
-      if (current && typeof current === "object") {
-        current = (current as Record<string, unknown>)[segment];
-        continue;
-      }
-
-      current = null;
-      break;
-    }
-
-    if (Array.isArray(current)) {
-      return current.filter(
-        (item): item is Record<string, unknown> =>
-          Boolean(item) && typeof item === "object",
-      );
-    }
+  const id = getOptionalObjectString(parsed, "id");
+  if (!id) {
+    throw new Error("SUPERSET_AGENT_CONFIG_JSON must include an id");
   }
-
-  return [];
-};
-
-const buildCreateWorkspaceArgs = (
-  config: SupersetConfig,
-  input: LaunchAgentInput,
-) => {
-  if (!config.deviceId) throw new Error("SUPERSET_DEVICE_ID is not configured");
-  const projectId = input.projectId || config.projectId;
-  if (!projectId) throw new Error("Superset project is not configured");
 
   return {
-    deviceId: config.deviceId,
-    projectId,
-    workspaces: [
-      {
-        name: input.workspaceName,
-        branchName: input.branch,
-        ...(config.sourceWorkspaceId
-          ? { sourceWorkspaceId: config.sourceWorkspaceId }
-          : {}),
-      },
-    ],
-  };
+    kind: "terminal",
+    ...(parsed as Record<string, unknown>),
+    id,
+  } as AgentConfig;
+};
+
+const getConfig = (): SupersetConfig => ({
+  apiKey: requireEnv("SUPERSET_API_KEY"),
+  organizationId: requireEnv("SUPERSET_ORGANIZATION_ID"),
+  agent: process.env.SUPERSET_AGENT?.trim() || "codex",
+  hostId: optionalEnv("SUPERSET_HOST_ID") ?? optionalEnv("SUPERSET_DEVICE_ID"),
+  projectId: optionalEnv("SUPERSET_PROJECT_ID"),
+  agentConfig: parseAgentConfig(),
+});
+
+const createClient = (config: SupersetConfig) => {
+  return new Superset({
+    apiKey: config.apiKey,
+    organizationId: config.organizationId,
+    logLevel: "warn",
+    timeout: 120_000,
+  });
+};
+
+const getTargetHostId = async (client: Superset, config: SupersetConfig) => {
+  if (config.hostId) return config.hostId;
+
+  const hosts = await client.hosts.list();
+  const host = hosts.find((item) => item.online) ?? hosts[0];
+
+  if (!host) {
+    throw new Error("No Superset hosts found for this organization");
+  }
+
+  if (!host.online) {
+    throw new Error(`Superset host ${host.name} is offline`);
+  }
+
+  return host.id;
+};
+
+const getAutomationAgentConfig = async (
+  client: Superset,
+  agent: string,
+): Promise<AgentConfig | null> => {
+  try {
+    const automations = await client.automations.list();
+    const automation =
+      automations.find((item) => item.agentConfig.id === agent) ??
+      automations[0];
+
+    return automation?.agentConfig ?? null;
+  } catch {
+    return null;
+  }
 };
 
 export const listSupersetProjects = async (): Promise<SupersetProject[]> => {
   const config = getConfig();
-  if (!config.deviceId) throw new Error("SUPERSET_DEVICE_ID is not configured");
+  const client = createClient(config);
+  const projects = await client.projects.list();
 
-  const { client, transport } = await createClient(config);
-
-  try {
-    const result = await client.callTool({
-      name: "list_projects",
-      arguments: { deviceId: config.deviceId },
-    });
-    const content = getStructuredContent(result);
-
-    return getRecordArray(content, ["projects"]).flatMap((project) => {
-      if (typeof project.id !== "string" || typeof project.name !== "string") {
-        return [];
-      }
-
-      return [
-        {
-          id: project.id,
-          name: project.name,
-          defaultBranch:
-            typeof project.defaultBranch === "string"
-              ? project.defaultBranch
-              : null,
-          mainRepoPath:
-            typeof project.mainRepoPath === "string"
-              ? project.mainRepoPath
-              : null,
-        },
-      ];
-    });
-  } finally {
-    await transport.close().catch(() => undefined);
-  }
+  return projects.map((project) => ({
+    id: project.id,
+    name: project.name,
+    defaultBranch: null,
+    mainRepoPath: project.repoCloneUrl,
+  }));
 };
-
-const buildStartAgentArgs = (
-  config: SupersetConfig,
-  workspaceId: string,
-  input: LaunchAgentInput,
-) => ({
-  deviceId: config.deviceId,
-  workspaceId,
-  agent: config.agent,
-  prompt: input.prompt,
-});
 
 export const buildSupersetPrompt = (args: {
   title: string;
@@ -278,57 +189,47 @@ export const launchSupersetAgent = async (
   input: LaunchAgentInput,
 ): Promise<LaunchAgentResult> => {
   const config = getConfig();
-  const { client, transport } = await createClient(config);
+  const client = createClient(config);
+  const projectId = input.projectId || config.projectId;
 
-  try {
-    if (!config.deviceId) throw new Error("SUPERSET_DEVICE_ID is not configured");
+  if (!projectId) throw new Error("Superset project is not configured");
 
-    let workspaceId = input.projectId ? null : config.workspaceId;
-    let createWorkspaceResponse: unknown = null;
+  const hostId = await getTargetHostId(client, config);
+  const agentConfig =
+    config.agentConfig ??
+    (await getAutomationAgentConfig(client, config.agent));
 
-    if (!workspaceId) {
-      const createWorkspaceResult = await client.callTool({
-        name: config.createWorkspaceTool,
-        arguments: buildCreateWorkspaceArgs(config, input),
-      });
-      createWorkspaceResponse = getStructuredContent(createWorkspaceResult);
-      workspaceId = getString(createWorkspaceResponse, [
-        "workspaceId",
-        "id",
-        "workspace.id",
-        "workspaces.0.id",
-        "created.0.workspaceId",
-      ]);
-
-      if (!workspaceId) {
-        throw new Error("Superset did not return a workspace id");
-      }
-    }
-
-    const startAgentResult = await client.callTool({
-      name: config.startAgentTool,
-      arguments: buildStartAgentArgs(config, workspaceId, input),
-    });
-    const startAgentResponse = getStructuredContent(startAgentResult);
-
-    return {
-      agent: config.agent,
-      workspaceId,
-      sessionId: getString(startAgentResponse, [
-        "sessionId",
-        "agentSessionId",
-        "id",
-        "session.id",
-      ]),
-      url:
-        getString(startAgentResponse, ["url", "session.url", "workspace.url"]) ??
-        getString(createWorkspaceResponse, ["url", "workspace.url"]),
-      response: {
-        workspace: createWorkspaceResponse,
-        session: startAgentResponse,
+  const workspace = await client.workspaces.create({
+    hostId,
+    projectId,
+    name: input.workspaceName,
+    branch: input.branch,
+    agents: [
+      {
+        agent: config.agent,
+        prompt: input.prompt,
+        ...(agentConfig ? { agentConfig } : {}),
       },
-    };
-  } finally {
-    await transport.close().catch(() => undefined);
-  }
+    ],
+  });
+
+  const agentRun = workspace.agentRuns[0];
+
+  return {
+    agent: config.agent,
+    workspaceId: workspace.id,
+    sessionId: agentRun?.runId ?? null,
+    url: null,
+    response: {
+      hostId,
+      projectId,
+      workspace,
+      agentRun,
+      agentConfigSource: agentConfig
+        ? config.agentConfig
+          ? "env"
+          : "automation"
+        : "preset",
+    },
+  };
 };
