@@ -1060,7 +1060,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       />
       <div className="relative flex h-full min-h-0 flex-col">
         <PatternedBackground />
-        <div className="sticky top-0 z-20 flex w-full flex-col gap-3 border-b border-light-300/80 bg-light-50/95 p-4 backdrop-blur dark:border-dark-300/80 dark:bg-dark-50/95 md:relative md:flex-row md:justify-between md:border-b-0 md:bg-transparent md:p-8 md:backdrop-blur-none md:dark:bg-transparent">
+        <div className="sticky top-0 z-20 flex w-full flex-col gap-3 bg-light-50/95 p-4 backdrop-blur dark:bg-dark-50/95 md:relative md:flex-row md:justify-between md:bg-transparent md:p-8 md:backdrop-blur-none md:dark:bg-transparent">
           {isLoading && !boardData && (
             <div className="flex space-x-2">
               <div className="h-[2.3rem] w-[150px] animate-pulse rounded-[5px] bg-light-200 dark:bg-dark-100" />
