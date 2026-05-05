@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { boards } from "./boards";
+import { notes } from "./notes";
 import { workspaceMemberPermissions, workspaceRoles } from "./permissions";
 import { subscription } from "./subscriptions";
 import { users } from "./users";
@@ -78,6 +79,7 @@ export const workspaceRelations = relations(workspaces, ({ one, many }) => ({
   }),
   members: many(workspaceMembers),
   boards: many(boards),
+  notes: many(notes),
   subscriptions: many(subscription),
   roles: many(workspaceRoles),
 }));

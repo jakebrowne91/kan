@@ -20,6 +20,8 @@ import boardsIconDark from "~/assets/boards-dark.json";
 import boardsIconLight from "~/assets/boards-light.json";
 import membersIconDark from "~/assets/members-dark.json";
 import membersIconLight from "~/assets/members-light.json";
+import notesIconDark from "~/assets/comments-dark.json";
+import notesIconLight from "~/assets/comments-light.json";
 import settingsIconDark from "~/assets/settings-dark.json";
 import settingsIconLight from "~/assets/settings-light.json";
 import templatesIconDark from "~/assets/templates-dark.json";
@@ -103,7 +105,7 @@ export default function SideNavigation({
       keyboardShortcut: {
         type: "SEQUENCE",
         strokes: [{ key: "G" }, { key: "B" }],
-        action: () => router.push("/boards"),
+        action: () => void router.push("/boards"),
         group: "NAVIGATION",
         description: t`Go to boards`,
       },
@@ -115,9 +117,21 @@ export default function SideNavigation({
       keyboardShortcut: {
         type: "SEQUENCE",
         strokes: [{ key: "G" }, { key: "T" }],
-        action: () => router.push("/templates"),
+        action: () => void router.push("/templates"),
         group: "NAVIGATION",
         description: t`Go to templates`,
+      },
+    },
+    {
+      name: t`Notes`,
+      href: "/notes",
+      icon: isDarkMode ? notesIconDark : notesIconLight,
+      keyboardShortcut: {
+        type: "SEQUENCE",
+        strokes: [{ key: "G" }, { key: "N" }],
+        action: () => void router.push("/notes"),
+        group: "NAVIGATION",
+        description: t`Go to notes`,
       },
     },
     {
@@ -127,7 +141,7 @@ export default function SideNavigation({
       keyboardShortcut: {
         type: "SEQUENCE",
         strokes: [{ key: "G" }, { key: "M" }],
-        action: () => router.push("/members"),
+        action: () => void router.push("/members"),
         group: "NAVIGATION",
         description: t`Go to members`,
       },
@@ -139,7 +153,7 @@ export default function SideNavigation({
       keyboardShortcut: {
         type: "SEQUENCE",
         strokes: [{ key: "G" }, { key: "S" }],
-        action: () => router.push("/settings"),
+        action: () => void router.push("/settings"),
         group: "NAVIGATION",
         description: t`Go to settings`,
       },
