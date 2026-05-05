@@ -4,10 +4,10 @@ export const BRAND_NAME = "GSD";
 
 export const BrandLogo = ({ className }: { className?: string }) => (
   <Image
-    src="/brand-mark.svg"
+    src="/GSD.png"
     alt={BRAND_NAME}
-    width={71}
-    height={16}
+    width={83}
+    height={29}
     unoptimized
     className={className}
   />
