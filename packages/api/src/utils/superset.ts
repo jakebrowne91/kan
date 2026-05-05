@@ -49,9 +49,14 @@ type SupersetAgentRun = {
   automationId: string;
   runId: string;
   id?: string;
+  status?: string;
   v2WorkspaceId?: string | null;
   terminalSessionId?: string | null;
   chatSessionId?: string | null;
+};
+
+type SupersetAutomationLogRun = Omit<Partial<SupersetAgentRun>, "id"> & {
+  id: string;
 };
 
 type CreatedSupersetWorkspace = SupersetWorkspace & {
@@ -200,6 +205,56 @@ const buildSupersetRunUrl = (args: {
   )}/?${search.toString()}`;
 };
 
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const waitForAutomationRunTarget = async (
+  client: Superset,
+  run: SupersetAgentRun | undefined,
+) => {
+  if (!run?.automationId || !run.runId) return run;
+
+  const hasTarget = (candidate: SupersetAgentRun | undefined) =>
+    Boolean(
+      getRunString(candidate, "v2WorkspaceId") &&
+        (getRunString(candidate, "terminalSessionId") ||
+          getRunString(candidate, "chatSessionId")),
+    );
+
+  if (hasTarget(run)) return run;
+
+  const deadline = Date.now() + 30_000;
+  let lastRun = run;
+
+  while (Date.now() < deadline) {
+    await sleep(1_500);
+
+    try {
+      const runs = (await client.automations.logs(run.automationId, {
+        limit: 5,
+      })) as unknown as SupersetAutomationLogRun[];
+      const latestRun = runs.find((item) => item.id === run.runId);
+
+      if (latestRun) {
+        lastRun = {
+          ...lastRun,
+          ...latestRun,
+        };
+      }
+
+      if (hasTarget(lastRun)) return lastRun;
+
+      if (lastRun.status === "dispatch_failed") return lastRun;
+    } catch {
+      return lastRun;
+    }
+  }
+
+  return lastRun;
+};
+
 const createWorkspaceViaCurrentHostApi = async (
   client: Superset,
   args: {
@@ -248,10 +303,11 @@ const createWorkspaceViaCurrentHostApi = async (
   });
 
   const agentRun = await client.automations.run(automation.id);
+  const hydratedAgentRun = await waitForAutomationRunTarget(client, agentRun);
 
   return {
     ...created.workspace,
-    agentRuns: [agentRun],
+    agentRuns: [hydratedAgentRun ?? agentRun],
   };
 };
 
@@ -284,10 +340,11 @@ const dispatchProjectAutomation = async (
   });
 
   const agentRun = await client.automations.run(automation.id);
+  const hydratedAgentRun = await waitForAutomationRunTarget(client, agentRun);
 
   return {
     workspace: null,
-    agentRuns: [agentRun],
+    agentRuns: [hydratedAgentRun ?? agentRun],
     automation,
   };
 };
