@@ -67,6 +67,34 @@ export const getByPublicId = async (db: dbClient, notePublicId: string) => {
   };
 };
 
+export const getByWorkspaceIdAndTitle = async (
+  db: dbClient,
+  workspaceId: number,
+  title: string,
+) => {
+  const [note] = await db
+    .select({
+      id: notes.id,
+      publicId: notes.publicId,
+      title: notes.title,
+      content: notes.content,
+      workspaceId: notes.workspaceId,
+      createdBy: notes.createdBy,
+      createdAt: notes.createdAt,
+      updatedAt: notes.updatedAt,
+    })
+    .from(notes)
+    .where(
+      and(
+        eq(notes.workspaceId, workspaceId),
+        eq(notes.title, title),
+        isNull(notes.deletedAt),
+      ),
+    );
+
+  return note;
+};
+
 export const create = async (
   db: dbClient,
   noteInput: {

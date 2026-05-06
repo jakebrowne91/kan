@@ -21,3 +21,8 @@ export const noteSchema = z.object({
 export const noteDeleteResponseSchema = z.object({
   success: z.boolean(),
 });
+
+export const noteAppendDailyResponseSchema = z.object({
+  note: noteSchema.omit({ user: true }),
+  created: z.boolean(),
+});
