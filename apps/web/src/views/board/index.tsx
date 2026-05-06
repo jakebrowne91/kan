@@ -146,9 +146,9 @@ const readBoardSortPreference = (
     );
     if (!rawPreference) return null;
 
-    const preference = JSON.parse(rawPreference) as Partial<
-      PersistedBoardSortPreference
-    >;
+    const preference = JSON.parse(
+      rawPreference,
+    ) as Partial<PersistedBoardSortPreference>;
     const sortBy = getBoardSortBy(preference.sortBy);
     const secondarySortBy = getBoardSortBy(
       preference.secondarySortBy ?? undefined,
@@ -668,6 +668,32 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     boardCards.find(({ card }) => card.publicId === mobileCardMenuPublicId) ??
     null;
 
+  const getCardMoveIndex = useCallback(
+    (
+      sourceListPublicId: string,
+      destinationListPublicId: string,
+      destinationIndex: number,
+    ) => {
+      if (!appliedSortBy) return destinationIndex;
+
+      if (sourceListPublicId === destinationListPublicId) return null;
+
+      const destinationList = boardData?.lists.find(
+        (list) => list.publicId === destinationListPublicId,
+      );
+
+      if (!destinationList) return destinationIndex;
+
+      return (
+        destinationList.cards.reduce(
+          (maxIndex, card) => Math.max(maxIndex, card.index),
+          -1,
+        ) + 1
+      );
+    },
+    [appliedSortBy, boardData?.lists],
+  );
+
   const openNewCardForm = useCallback(
     (preferredListPublicId?: string) => {
       if (!canCreateCard) return;
@@ -808,14 +834,27 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         boardData?.lists[selectedCardInfo.listIndex + direction];
       if (!targetList) return;
 
+      const index = getCardMoveIndex(
+        selectedCardInfo.list.publicId,
+        targetList.publicId,
+        Math.min(selectedCardInfo.cardIndex, targetList.cards.length),
+      );
+      if (index === null) return;
+
       updateCardMutation.mutate({
         cardPublicId: selectedCardInfo.card.publicId,
         listPublicId: targetList.publicId,
-        index: Math.min(selectedCardInfo.cardIndex, targetList.cards.length),
+        index,
       });
       setSelectedPublicListId(targetList.publicId);
     },
-    [boardData?.lists, canEditCard, selectedCardInfo, updateCardMutation],
+    [
+      boardData?.lists,
+      canEditCard,
+      getCardMoveIndex,
+      selectedCardInfo,
+      updateCardMutation,
+    ],
   );
 
   const moveSelectedCardToDone = useCallback(() => {
@@ -1091,7 +1130,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   };
 
   const onDragEnd = ({
-    source: _source,
+    source,
     destination,
     draggableId,
     type,
@@ -1108,11 +1147,17 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     }
 
     if (type === "CARD" && canEditCard) {
+      const index = getCardMoveIndex(
+        source.droppableId,
+        destination.droppableId,
+        destination.index,
+      );
+      if (index === null) return;
+
       updateCardMutation.mutate({
         cardPublicId: draggableId,
-
         listPublicId: destination.droppableId,
-        index: destination.index,
+        index,
       });
     }
   };
