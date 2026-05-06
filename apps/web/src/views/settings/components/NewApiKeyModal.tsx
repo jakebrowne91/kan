@@ -37,6 +37,7 @@ export default function NewApiKeyModal() {
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors },
   } = useForm<z.infer<typeof newApiKeySchema>>({
     resolver: zodResolver(newApiKeySchema),
@@ -48,21 +49,34 @@ export default function NewApiKeyModal() {
   const qc = useQueryClient();
 
   const createApiKeyMutation = useMutation({
-    mutationFn: ({ name }: { name: string }) =>
-      authClient.apiKey.create({ name, prefix: "kan_" }),
-    onSuccess: ({ data: apiKey }) => {
+    mutationFn: async ({ name }: { name: string }) => {
+      const result = await authClient.apiKey.create({ name, prefix: "kan_" });
+
+      if (result.error) {
+        throw new Error(result.error.message ?? t`Unable to create API key`);
+      }
+
+      if (!result.data.key) {
+        throw new Error(t`Unable to create API key`);
+      }
+
+      return result.data;
+    },
+    onSuccess: (apiKey) => {
       void qc.invalidateQueries({
         queryKey: ["apiKeys"],
       });
-      if (apiKey && apiKey.key && apiKey.name) {
-        setCreatedApiKey({
-          key: apiKey.key,
-          name: apiKey.name,
-        });
-      }
+      setCreatedApiKey({
+        key: apiKey.key,
+        name: apiKey.name ?? t`API key`,
+      });
     },
-    onError: () => {
-      // Handle error if needed
+    onError: (error) => {
+      setError("name", {
+        type: "manual",
+        message:
+          error instanceof Error ? error.message : t`Unable to create API key`,
+      });
     },
   });
 
