@@ -773,6 +773,7 @@ const NotesView = () => {
     () => parseDailyNoteTitle(title),
     [title],
   );
+  const dailyNavigationDate = selectedDailyNoteDate ?? new Date();
 
   const filteredNotes = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -946,15 +947,37 @@ const NotesView = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleOpenToday}
-              isLoading={isCreatingNote}
-              iconLeft={<HiOutlineCalendarDays className="h-4 w-4" />}
-            >
-              {t`Today`}
-            </Button>
+            <div className="flex items-center rounded-md border border-light-300 bg-light-50 dark:border-dark-300 dark:bg-dark-50">
+              <button
+                type="button"
+                onClick={() =>
+                  handleOpenDailyNote(addDays(dailyNavigationDate, -1))
+                }
+                className="inline-flex h-9 w-9 items-center justify-center rounded-l-md text-light-900 transition-colors hover:bg-light-200 hover:text-light-1000 focus:outline-none focus:ring-2 focus:ring-light-600 dark:text-dark-900 dark:hover:bg-dark-200 dark:hover:text-dark-1000 dark:focus:ring-dark-600"
+                aria-label={t`Previous daily note`}
+              >
+                <HiChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenToday}
+                disabled={isCreatingNote}
+                className="inline-flex h-9 items-center gap-2 px-3 text-sm font-semibold text-light-1000 transition-colors hover:bg-light-200 focus:outline-none focus:ring-2 focus:ring-light-600 disabled:cursor-not-allowed disabled:opacity-60 dark:text-dark-1000 dark:hover:bg-dark-200 dark:focus:ring-dark-600"
+              >
+                <HiOutlineCalendarDays className="h-4 w-4" />
+                {t`Today`}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  handleOpenDailyNote(addDays(dailyNavigationDate, 1))
+                }
+                className="inline-flex h-9 w-9 items-center justify-center rounded-r-md text-light-900 transition-colors hover:bg-light-200 hover:text-light-1000 focus:outline-none focus:ring-2 focus:ring-light-600 dark:text-dark-900 dark:hover:bg-dark-200 dark:hover:text-dark-1000 dark:focus:ring-dark-600"
+                aria-label={t`Next daily note`}
+              >
+                <HiChevronRight className="h-4 w-4" />
+              </button>
+            </div>
             <Button
               type="button"
               onClick={handleCreateNote}
@@ -1054,7 +1077,7 @@ const NotesView = () => {
                       placeholder={untitledNote}
                     />
                     {selectedDailyNoteDate ? (
-                      <div className="hidden items-center gap-1 md:flex">
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
                           onClick={() =>
