@@ -205,16 +205,6 @@ const persistBoardSortPreference = (
   }
 };
 
-const clearBoardSortPreference = (boardPublicId: string | null) => {
-  if (!boardPublicId) return;
-
-  try {
-    localStorage.removeItem(getBoardSortPreferenceKey(boardPublicId));
-  } catch {
-    // localStorage can be unavailable in private/locked-down browser contexts.
-  }
-};
-
 export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   const params = useParams() as { boardId: string | string[] } | null;
   const router = useRouter();
@@ -229,7 +219,6 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     string | null
   >(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isManualOrdering, setIsManualOrdering] = useState(false);
   const [isMobileBoard, setIsMobileBoard] = useState(false);
   const [mobileCardMenuPublicId, setMobileCardMenuPublicId] = useState<
     string | null
@@ -307,8 +296,8 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   const secondarySortDirection = getBoardSortDirection(
     router.query.secondarySortDirection,
   );
-  const appliedSortBy = isManualOrdering ? null : sortBy;
-  const appliedSecondarySortBy = isManualOrdering ? null : secondarySortBy;
+  const appliedSortBy = sortBy;
+  const appliedSecondarySortBy = secondarySortBy;
 
   useEffect(() => {
     if (!router.isReady || !boardId || isTemplate) return;
@@ -722,7 +711,6 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
       nextSortBy: BoardSortBy | null,
       nextDirection: BoardSortDirection,
     ) => {
-      setIsManualOrdering(false);
       const nextQuery = { ...router.query };
 
       if (level === "primary") {
@@ -761,31 +749,6 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     },
     [boardId, router],
   );
-
-  const clearSortForManualOrdering = useCallback(() => {
-    if (!sortBy && !secondarySortBy) return;
-
-    setIsManualOrdering(true);
-
-    const nextQuery = { ...router.query };
-    delete nextQuery.sortBy;
-    delete nextQuery.sortDirection;
-    delete nextQuery.secondarySortBy;
-    delete nextQuery.secondarySortDirection;
-
-    clearBoardSortPreference(boardId);
-
-    void router
-      .replace(
-        {
-          pathname: router.pathname,
-          query: nextQuery,
-        },
-        undefined,
-        { shallow: true },
-      )
-      .catch((error) => console.error(error));
-  }, [boardId, router, secondarySortBy, sortBy]);
 
   useEffect(() => {
     if (
@@ -1446,10 +1409,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
                   </Tooltip>
                 </div>
               ) : (
-                <DragDropContext
-                  onBeforeCapture={clearSortForManualOrdering}
-                  onDragEnd={onDragEnd}
-                >
+                <DragDropContext onDragEnd={onDragEnd}>
                   <Droppable
                     droppableId="all-lists"
                     direction="horizontal"
