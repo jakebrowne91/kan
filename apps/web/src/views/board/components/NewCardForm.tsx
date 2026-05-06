@@ -43,6 +43,7 @@ interface QueryParams {
 
 interface NewCardFormProps {
   isTemplate: boolean;
+  isBoardSorted: boolean;
   boardPublicId: string;
   listPublicId: string;
   queryParams: QueryParams;
@@ -50,6 +51,7 @@ interface NewCardFormProps {
 
 export function NewCardForm({
   isTemplate,
+  isBoardSorted,
   boardPublicId,
   listPublicId,
   queryParams,
@@ -102,34 +104,49 @@ export function NewCardForm({
   const { data: boardData } = api.board.byId.useQuery(queryParams, {
     enabled: !!boardPublicId,
   });
+  const newLabelCreatedPublicId =
+    typeof modalStates.NEW_LABEL_CREATED === "string"
+      ? modalStates.NEW_LABEL_CREATED
+      : undefined;
 
   // this adds the new created label to selected labels
   useEffect(() => {
-    const newLabelId = modalStates.NEW_LABEL_CREATED;
-    if (newLabelId !== undefined && !labelPublicIds.includes(newLabelId)) {
-      setValue("labelPublicIds", [...labelPublicIds, newLabelId]);
+    if (
+      newLabelCreatedPublicId !== undefined &&
+      !labelPublicIds.includes(newLabelCreatedPublicId)
+    ) {
+      setValue("labelPublicIds", [...labelPublicIds, newLabelCreatedPublicId]);
     }
-  }, [modalStates, labelPublicIds]);
+  }, [labelPublicIds, newLabelCreatedPublicId, setValue]);
 
   // this removes the deleted label from selected labels if it is selected
   useEffect(() => {
     if (boardData?.labels) {
       const availableLabelIds = boardData.labels.map((label) => label.publicId);
-      const newLabelId = modalStates.NEW_LABEL_CREATED;
 
-      if (newLabelId && availableLabelIds.includes(newLabelId)) {
+      if (
+        newLabelCreatedPublicId &&
+        availableLabelIds.includes(newLabelCreatedPublicId)
+      ) {
         clearModalState("NEW_LABEL_CREATED");
       }
 
       const validLabelIds = labelPublicIds.filter(
-        (id) => availableLabelIds.includes(id) || id === newLabelId,
+        (id) =>
+          availableLabelIds.includes(id) || id === newLabelCreatedPublicId,
       );
 
       if (validLabelIds.length !== labelPublicIds.length) {
         setValue("labelPublicIds", validLabelIds);
       }
     }
-  }, [boardData?.labels, labelPublicIds, modalStates.NEW_LABEL_CREATED]);
+  }, [
+    boardData?.labels,
+    clearModalState,
+    labelPublicIds,
+    newLabelCreatedPublicId,
+    setValue,
+  ]);
 
   const createCard = api.card.create.useMutation({
     onMutate: async (args) => {
@@ -142,6 +159,13 @@ export function NewCardForm({
 
         const updatedLists = oldBoard.lists.map((list) => {
           if (list.publicId === args.listPublicId) {
+            const index =
+              args.position === "start"
+                ? 0
+                : list.cards.reduce(
+                    (maxIndex, card) => Math.max(maxIndex, card.index),
+                    -1,
+                  ) + 1;
             const newCard = {
               publicId: `PLACEHOLDER_${generateUID()}`,
               title: args.title,
@@ -167,11 +191,11 @@ export function NewCardForm({
                 })),
               _filteredLabels: labelPublicIds.map((id) => ({ publicId: id })),
               _filteredMembers: memberPublicIds.map((id) => ({ publicId: id })),
-              index: position === "start" ? 0 : list.cards.length,
+              index,
             };
 
             const updatedCards =
-              position === "start"
+              args.position === "start"
                 ? [newCard, ...list.cards]
                 : [...list.cards, newCard];
             return { ...list, cards: updatedCards };
@@ -267,7 +291,7 @@ export function NewCardForm({
       listPublicId: data.listPublicId,
       labelPublicIds: data.labelPublicIds,
       memberPublicIds: data.memberPublicIds,
-      position: data.position,
+      position: isBoardSorted ? "end" : data.position,
       dueDate: data.dueDate ?? null,
       priority: data.priority ?? null,
     });
@@ -512,19 +536,21 @@ export function NewCardForm({
               </>
             )}
           </div>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              setValue("position", position === "start" ? "end" : "start");
-            }}
-            className="flex h-auto items-center rounded-[5px] border-[1px] border-light-600 bg-light-200 px-1.5 py-1 text-left text-xs text-light-800 hover:bg-light-300 focus-visible:outline-none dark:border-dark-600 dark:bg-dark-400 dark:text-dark-1000 dark:hover:bg-dark-500"
-          >
-            {position === "start" ? (
-              <HiOutlineBarsArrowUp size={14} />
-            ) : (
-              <HiOutlineBarsArrowDown size={14} />
-            )}
-          </button>
+          {!isBoardSorted && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                setValue("position", position === "start" ? "end" : "start");
+              }}
+              className="flex h-auto items-center rounded-[5px] border-[1px] border-light-600 bg-light-200 px-1.5 py-1 text-left text-xs text-light-800 hover:bg-light-300 focus-visible:outline-none dark:border-dark-600 dark:bg-dark-400 dark:text-dark-1000 dark:hover:bg-dark-500"
+            >
+              {position === "start" ? (
+                <HiOutlineBarsArrowUp size={14} />
+              ) : (
+                <HiOutlineBarsArrowDown size={14} />
+              )}
+            </button>
+          )}
         </div>
       </div>
 

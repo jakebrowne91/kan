@@ -1191,6 +1191,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         >
           <NewCardForm
             isTemplate={!!isTemplate}
+            isBoardSorted={!!appliedSortBy}
             boardPublicId={boardId ?? ""}
             listPublicId={selectedPublicListId}
             queryParams={queryParams}
