@@ -8,6 +8,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { addDays, format, isValid, parse } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  HiChevronDown,
   HiChevronLeft,
   HiChevronRight,
   HiH1,
@@ -109,6 +110,8 @@ const parseDailyNoteTitle = (title: string) => {
 
   return isValid(parsedDate) ? parsedDate : null;
 };
+
+const isDailyNote = (note: Note) => parseDailyNoteTitle(note.title) !== null;
 
 const formatUpdatedAt = (note: Note) =>
   new Intl.DateTimeFormat(undefined, {
@@ -757,6 +760,8 @@ const NotesView = () => {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [isDesktopViewport, setIsDesktopViewport] = useState(false);
+  const [areRegularNotesOpen, setAreRegularNotesOpen] = useState(true);
+  const [areDailyNotesOpen, setAreDailyNotesOpen] = useState(false);
   const loadedNotePublicId = useRef<string | null>(null);
 
   const notesQuery = api.note.list.useQuery(
@@ -775,14 +780,39 @@ const NotesView = () => {
   );
   const dailyNavigationDate = selectedDailyNoteDate ?? new Date();
 
-  const filteredNotes = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return notes;
+  const regularNotes = useMemo(
+    () => notes.filter((note) => !isDailyNote(note)),
+    [notes],
+  );
 
-    return notes.filter((note) =>
+  const dailyNotes = useMemo(() => {
+    return notes
+      .map((note) => ({
+        note,
+        date: parseDailyNoteTitle(note.title),
+      }))
+      .filter((item): item is { note: Note; date: Date } => item.date !== null)
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .map(({ note }) => note);
+  }, [notes]);
+
+  const filteredRegularNotes = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return regularNotes;
+
+    return regularNotes.filter((note) =>
       `${note.title} ${note.content}`.toLowerCase().includes(query),
     );
-  }, [notes, search]);
+  }, [regularNotes, search]);
+
+  const filteredDailyNotes = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return dailyNotes;
+
+    return dailyNotes.filter((note) =>
+      `${note.title} ${note.content}`.toLowerCase().includes(query),
+    );
+  }, [dailyNotes, search]);
 
   const createNote = api.note.create.useMutation({
     onSuccess: async (note) => {
@@ -839,10 +869,22 @@ const NotesView = () => {
   }, []);
 
   useEffect(() => {
-    if (!isDesktopViewport || selectedNotePublicId || notes.length === 0)
+    if (!isDesktopViewport || selectedNotePublicId) return;
+    setSelectedNotePublicId(
+      regularNotes[0]?.publicId ?? dailyNotes[0]?.publicId ?? null,
+    );
+  }, [dailyNotes, isDesktopViewport, regularNotes, selectedNotePublicId]);
+
+  useEffect(() => {
+    if (!selectedNote) return;
+
+    if (isDailyNote(selectedNote)) {
+      setAreDailyNotesOpen(true);
       return;
-    setSelectedNotePublicId(notes[0]?.publicId ?? null);
-  }, [isDesktopViewport, notes, selectedNotePublicId]);
+    }
+
+    setAreRegularNotesOpen(true);
+  }, [selectedNote]);
 
   useEffect(() => {
     if (!selectedNote) {
@@ -1012,37 +1054,136 @@ const NotesView = () => {
                 <div className="px-3 py-8 text-center text-sm text-light-900 dark:text-dark-900">
                   {t`Loading notes...`}
                 </div>
-              ) : filteredNotes.length ? (
-                <ul className="space-y-1">
-                  {filteredNotes.map((note) => {
-                    const isSelected = note.publicId === selectedNotePublicId;
-
-                    return (
-                      <li key={note.publicId}>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedNotePublicId(note.publicId)}
+              ) : regularNotes.length || dailyNotes.length ? (
+                <div className="space-y-3">
+                  <section>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAreRegularNotesOpen((isOpen) => !isOpen)
+                      }
+                      className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-light-900 transition-colors hover:bg-light-200 dark:text-dark-900 dark:hover:bg-dark-200"
+                    >
+                      <span>{t`Notes`}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono text-[11px]">
+                          {filteredRegularNotes.length}
+                        </span>
+                        <HiChevronDown
                           className={twMerge(
-                            "w-full rounded-md px-3 py-2 text-left transition-colors",
-                            isSelected
-                              ? "bg-light-200 dark:bg-dark-200"
-                              : "hover:bg-light-200 dark:hover:bg-dark-200",
+                            "h-4 w-4 transition-transform",
+                            !areRegularNotesOpen && "-rotate-90",
                           )}
-                        >
-                          <div className="line-clamp-1 text-sm font-semibold text-light-1000 dark:text-dark-1000">
-                            {note.title}
-                          </div>
-                          <div className="mt-1 line-clamp-2 text-xs leading-5 text-light-900 dark:text-dark-900">
-                            {getPreview(note.content)}
-                          </div>
-                          <div className="mt-2 text-[11px] text-light-800 dark:text-dark-800">
-                            {formatUpdatedAt(note)}
-                          </div>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                        />
+                      </span>
+                    </button>
+                    {areRegularNotesOpen ? (
+                      filteredRegularNotes.length ? (
+                        <ul className="mt-1 space-y-1">
+                          {filteredRegularNotes.map((note) => {
+                            const isSelected =
+                              note.publicId === selectedNotePublicId;
+
+                            return (
+                              <li key={note.publicId}>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedNotePublicId(note.publicId)
+                                  }
+                                  className={twMerge(
+                                    "w-full rounded-md px-3 py-2 text-left transition-colors",
+                                    isSelected
+                                      ? "bg-light-200 dark:bg-dark-200"
+                                      : "hover:bg-light-200 dark:hover:bg-dark-200",
+                                  )}
+                                >
+                                  <div className="line-clamp-1 text-sm font-semibold text-light-1000 dark:text-dark-1000">
+                                    {note.title}
+                                  </div>
+                                  <div className="mt-1 line-clamp-2 text-xs leading-5 text-light-900 dark:text-dark-900">
+                                    {getPreview(note.content)}
+                                  </div>
+                                  <div className="mt-2 text-[11px] text-light-800 dark:text-dark-800">
+                                    {formatUpdatedAt(note)}
+                                  </div>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <div className="px-3 py-3 text-xs text-light-800 dark:text-dark-800">
+                          {search ? t`No notes found` : t`No notes yet`}
+                        </div>
+                      )
+                    ) : null}
+                  </section>
+
+                  <section>
+                    <button
+                      type="button"
+                      onClick={() => setAreDailyNotesOpen((isOpen) => !isOpen)}
+                      className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-light-900 transition-colors hover:bg-light-200 dark:text-dark-900 dark:hover:bg-dark-200"
+                    >
+                      <span>{t`Daily notes`}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-mono text-[11px]">
+                          {filteredDailyNotes.length}
+                        </span>
+                        <HiChevronDown
+                          className={twMerge(
+                            "h-4 w-4 transition-transform",
+                            !areDailyNotesOpen && "-rotate-90",
+                          )}
+                        />
+                      </span>
+                    </button>
+                    {areDailyNotesOpen ? (
+                      filteredDailyNotes.length ? (
+                        <ul className="mt-1 space-y-1">
+                          {filteredDailyNotes.map((note) => {
+                            const isSelected =
+                              note.publicId === selectedNotePublicId;
+
+                            return (
+                              <li key={note.publicId}>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedNotePublicId(note.publicId)
+                                  }
+                                  className={twMerge(
+                                    "w-full rounded-md px-3 py-2 text-left transition-colors",
+                                    isSelected
+                                      ? "bg-light-200 dark:bg-dark-200"
+                                      : "hover:bg-light-200 dark:hover:bg-dark-200",
+                                  )}
+                                >
+                                  <div className="line-clamp-1 text-sm font-semibold text-light-1000 dark:text-dark-1000">
+                                    {note.title}
+                                  </div>
+                                  <div className="mt-1 line-clamp-2 text-xs leading-5 text-light-900 dark:text-dark-900">
+                                    {getPreview(note.content)}
+                                  </div>
+                                  <div className="mt-2 text-[11px] text-light-800 dark:text-dark-800">
+                                    {formatUpdatedAt(note)}
+                                  </div>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <div className="px-3 py-3 text-xs text-light-800 dark:text-dark-800">
+                          {search
+                            ? t`No daily notes found`
+                            : t`Use Today to create a daily note`}
+                        </div>
+                      )
+                    ) : null}
+                  </section>
+                </div>
               ) : (
                 <div className="px-3 py-8 text-center text-sm text-light-900 dark:text-dark-900">
                   {search ? t`No notes found` : t`No notes yet`}
