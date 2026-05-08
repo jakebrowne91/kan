@@ -656,6 +656,16 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
   const mobileCardMenuInfo =
     boardCards.find(({ card }) => card.publicId === mobileCardMenuPublicId) ??
     null;
+  const showMobileNewTaskButton =
+    !isTemplate &&
+    !isOpen &&
+    !mobileCardMenuInfo &&
+    canCreateCard &&
+    (sortedBoardData?.lists.length ?? 0) > 0;
+  const defaultNewTaskListPublicId =
+    boardData?.lists.find(
+      (list) => list.name.trim().toLowerCase() === "not started",
+    )?.publicId ?? boardData?.lists[0]?.publicId;
 
   const getCardMoveIndex = useCallback(
     (
@@ -687,22 +697,13 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
     (preferredListPublicId?: string) => {
       if (!canCreateCard) return;
 
-      const listPublicId =
-        preferredListPublicId ??
-        selectedCardInfo?.list.publicId ??
-        (selectedPublicListId || boardData?.lists[0]?.publicId);
+      const listPublicId = preferredListPublicId ?? defaultNewTaskListPublicId;
 
       if (!listPublicId) return;
       setSelectedPublicListId(listPublicId);
       openModal("NEW_CARD");
     },
-    [
-      boardData?.lists,
-      canCreateCard,
-      openModal,
-      selectedCardInfo?.list.publicId,
-      selectedPublicListId,
-    ],
+    [canCreateCard, defaultNewTaskListPublicId, openModal],
   );
 
   const updateSort = useCallback(
@@ -1150,6 +1151,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
 
         <Modal
           modalSize="md"
+          positionFromTop="sm"
           isVisible={isOpen && modalContentType === "NEW_CARD"}
         >
           <NewCardForm
@@ -1370,7 +1372,7 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
         <div
           ref={scrollRef}
           onMouseDown={onMouseDown}
-          className={`scrollbar-w-none scrollbar-track-rounded-[4px] scrollbar-thumb-rounded-[4px] scrollbar-h-[8px] z-0 flex-1 snap-x snap-mandatory overflow-y-hidden overflow-x-scroll overscroll-contain px-4 pb-4 scrollbar scrollbar-track-light-200 scrollbar-thumb-light-400 dark:scrollbar-track-dark-100 dark:scrollbar-thumb-dark-300 md:px-0 md:pb-0`}
+          className={`scrollbar-w-none scrollbar-track-rounded-[4px] scrollbar-thumb-rounded-[4px] scrollbar-h-[8px] z-0 flex-1 snap-x snap-mandatory overflow-y-hidden overflow-x-scroll overscroll-contain px-4 pb-28 scrollbar scrollbar-track-light-200 scrollbar-thumb-light-400 dark:scrollbar-track-dark-100 dark:scrollbar-thumb-dark-300 md:px-0 md:pb-0`}
         >
           {isLoading ? (
             <div className="flex md:ml-[2rem]">
@@ -1591,6 +1593,18 @@ export default function BoardPage({ isTemplate }: { isTemplate?: boolean }) {
             onAction={handleCardContextMenuAction}
             canEdit={!!canEditCard}
           />
+        )}
+        {showMobileNewTaskButton && (
+          <div className="bg-light-50/95 dark:bg-dark-50/95 fixed inset-x-0 bottom-0 z-[70] border-t border-light-300 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur dark:border-dark-300 dark:shadow-[0_-8px_24px_rgba(0,0,0,0.24)] md:hidden">
+            <button
+              type="button"
+              onClick={() => openNewCardForm()}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-light-1000 px-4 text-sm font-semibold text-light-50 shadow-sm transition hover:bg-light-900 active:translate-y-px dark:bg-dark-1000 dark:text-dark-50 dark:hover:bg-dark-900"
+            >
+              <HiOutlinePlusSmall className="h-5 w-5" aria-hidden="true" />
+              {t`NEW TASK`}
+            </button>
+          </div>
         )}
         {mobileCardMenuInfo && (
           <div
