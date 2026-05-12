@@ -260,6 +260,13 @@
       "when": 1777982400000,
       "tag": "20260505120000_AddNotes",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1778598000000,
+      "tag": "20260512150000_EnableRlsForSupabasePublicTables",
+      "breakpoints": true
     }
   ]
 }
