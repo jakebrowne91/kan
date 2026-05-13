@@ -8,6 +8,10 @@ import { IoChevronForwardSharp } from "react-icons/io5";
 
 import { authClient } from "@kan/auth/client";
 
+import type {
+  SupportContext,
+  SupportParameter,
+} from "~/utils/retrogradeSupport";
 import Avatar from "~/components/Avatar";
 import Button from "~/components/Button";
 import Editor from "~/components/Editor";
@@ -18,6 +22,7 @@ import Modal from "~/components/modal";
 import { NewWorkspaceForm } from "~/components/NewWorkspaceForm";
 import { PageHead } from "~/components/PageHead";
 import { EditYouTubeModal } from "~/components/YouTubeEmbed/EditYouTubeModal";
+import { env } from "~/env";
 import { usePermissions } from "~/hooks/usePermissions";
 import { useModal } from "~/providers/modal";
 import { usePopup } from "~/providers/popup";
@@ -25,6 +30,7 @@ import { useWorkspace } from "~/providers/workspace";
 import { api } from "~/utils/api";
 import { invalidateCard } from "~/utils/cardInvalidation";
 import { formatMemberDisplayName, getAvatarUrl } from "~/utils/helpers";
+import { parseRetrogradeSupportContext } from "~/utils/retrogradeSupport";
 import { DeleteLabelConfirmation } from "../../components/DeleteLabelConfirmation";
 import ActivityList from "./components/ActivityList";
 import { AttachmentThumbnails } from "./components/AttachmentThumbnails";
@@ -45,6 +51,131 @@ interface FormValues {
   cardId: string;
   title: string;
   description: string;
+}
+
+const DEFAULT_RETROGRADE_ADMIN_APP_URL =
+  "https://admin.creatorcomputecompany.com";
+
+function getRetrogradeAdminAppUrl() {
+  return (
+    env.NEXT_PUBLIC_RETROGRADE_ADMIN_APP_URL ?? DEFAULT_RETROGRADE_ADMIN_APP_URL
+  ).replace(/\/+$/, "");
+}
+
+function buildAdminUrl(path: string) {
+  return `${getRetrogradeAdminAppUrl()}${path}`;
+}
+
+function buildGitHubRepoUrl(repoFullName: string) {
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repoFullName)
+    ? `https://github.com/${repoFullName}`
+    : null;
+}
+
+function getSupportParameterLink(
+  parameter: SupportParameter,
+  context: SupportContext,
+) {
+  const creatorUserId = context.byKey.userId;
+
+  switch (parameter.key) {
+    case "userId":
+      return {
+        href: buildAdminUrl(
+          `/user-activity/${encodeURIComponent(parameter.value)}`,
+        ),
+        target: "_top",
+      };
+    case "emmaUserId":
+      return {
+        href: creatorUserId
+          ? buildAdminUrl(`/user-activity/${encodeURIComponent(creatorUserId)}`)
+          : buildAdminUrl(
+              `/users?search=${encodeURIComponent(parameter.value)}`,
+            ),
+        target: "_top",
+      };
+    case "email":
+      return {
+        href: creatorUserId
+          ? buildAdminUrl(`/user-activity/${encodeURIComponent(creatorUserId)}`)
+          : buildAdminUrl(
+              `/users?search=${encodeURIComponent(parameter.value)}`,
+            ),
+        target: "_top",
+      };
+    case "ariSessionUrl":
+      return /^https?:\/\//i.test(parameter.value)
+        ? { href: parameter.value, target: "_blank" }
+        : null;
+    case "repoFullName": {
+      const href = buildGitHubRepoUrl(parameter.value);
+      return href ? { href, target: "_blank" } : null;
+    }
+    default:
+      return null;
+  }
+}
+
+function SupportContextRow({
+  parameter,
+  context,
+}: {
+  parameter: SupportParameter;
+  context: SupportContext;
+}) {
+  const link = getSupportParameterLink(parameter, context);
+  const valueClasses =
+    "min-w-0 flex-1 break-words text-xs font-medium leading-5 text-light-1000 dark:text-dark-1000";
+
+  return (
+    <div className="flex w-full flex-row gap-3">
+      <p className="w-[100px] shrink-0 text-xs font-medium leading-5 text-light-800 dark:text-dark-800">
+        {parameter.label}
+      </p>
+      {link ? (
+        <a
+          className={`${valueClasses} underline underline-offset-2 hover:text-light-900 dark:hover:text-dark-900`}
+          href={link.href}
+          target={link.target}
+          rel={link.target === "_blank" ? "noreferrer" : undefined}
+          title={parameter.value}
+        >
+          {parameter.value}
+        </a>
+      ) : (
+        <p className={valueClasses} title={parameter.value}>
+          {parameter.value}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SupportContextPanel({
+  description,
+}: {
+  description: string | null | undefined;
+}) {
+  const context = parseRetrogradeSupportContext(description);
+  if (!context) return null;
+
+  return (
+    <div className="mt-6 border-t border-light-300 pt-5 dark:border-dark-300">
+      <p className="mb-3 text-sm font-semibold text-light-1000 dark:text-dark-1000">
+        Support context
+      </p>
+      <div className="space-y-3">
+        {context.parameters.map((parameter) => (
+          <SupportContextRow
+            key={parameter.key}
+            parameter={parameter}
+            context={context}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
@@ -220,9 +351,7 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
                 supersetProjects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {project.name}
-                    {project.defaultBranch
-                      ? ` (${project.defaultBranch})`
-                      : ""}
+                    {project.defaultBranch ? ` (${project.defaultBranch})` : ""}
                   </option>
                 ))
               ) : (
@@ -278,6 +407,7 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
           </div>
         </div>
       )}
+      {!isTemplate && <SupportContextPanel description={card?.description} />}
     </div>
   );
 }
@@ -305,7 +435,11 @@ export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
     ? router.query.cardId[0]
     : router.query.cardId;
 
-  const { data: card, isLoading, error } = api.card.byId.useQuery(
+  const {
+    data: card,
+    isLoading,
+    error,
+  } = api.card.byId.useQuery(
     { cardPublicId: cardId ?? "" },
     { enabled: !!cardId && cardId.length >= 12 },
   );
@@ -460,14 +594,15 @@ export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
                 >
                   {board?.name}
                 </Link>
-                {card.cardNumber != null && card.list.board.workspace.cardPrefix && (
-                  <>
-                    <IoChevronForwardSharp className="h-[10px] w-[10px] text-light-900 dark:text-dark-900" />
-                    <span className="whitespace-nowrap text-sm font-bold leading-[1.5rem] text-light-700 dark:text-dark-800">
-                      {card.list.board.workspace.cardPrefix}-{card.cardNumber}
-                    </span>
-                  </>
-                )}
+                {card.cardNumber != null &&
+                  card.list.board.workspace.cardPrefix && (
+                    <>
+                      <IoChevronForwardSharp className="h-[10px] w-[10px] text-light-900 dark:text-dark-900" />
+                      <span className="whitespace-nowrap text-sm font-bold leading-[1.5rem] text-light-700 dark:text-dark-800">
+                        {card.list.board.workspace.cardPrefix}-{card.cardNumber}
+                      </span>
+                    </>
+                  )}
               </div>
               <div className="flex items-center gap-2">
                 <Dropdown
@@ -476,7 +611,8 @@ export default function CardPage({ isTemplate }: { isTemplate?: boolean }) {
                   boardPublicId={boardId}
                   cardCreatedBy={card?.createdBy}
                   ticketNumber={
-                    card.cardNumber != null && card.list.board.workspace.cardPrefix
+                    card.cardNumber != null &&
+                    card.list.board.workspace.cardPrefix
                       ? `${card.list.board.workspace.cardPrefix}-${card.cardNumber}`
                       : null
                   }
