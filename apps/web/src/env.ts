@@ -16,6 +16,12 @@ export const env = createEnv({
   server: {
     KAN_ADMIN_API_KEY: z.string().optional(),
     BETTER_AUTH_SECRET: z.string(),
+    RETROGRADE_GSD_SSO_SECRET: z.string().optional(),
+    RETROGRADE_GSD_API_SECRET: z.string().optional(),
+    RETROGRADE_SUPPORT_WORKSPACE_SLUG: z.string().optional(),
+    RETROGRADE_SUPPORT_WORKSPACE_NAME: z.string().optional(),
+    RETROGRADE_SUPPORT_BOARD_SLUG: z.string().optional(),
+    RETROGRADE_SUPPORT_BOARD_NAME: z.string().optional(),
     BETTER_AUTH_TRUSTED_ORIGINS: z
       .string()
       .transform((s) => (s === "" ? undefined : s))
