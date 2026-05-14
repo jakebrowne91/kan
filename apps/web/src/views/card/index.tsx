@@ -193,9 +193,12 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
     { cardPublicId: cardId ?? "" },
     { enabled: !!cardId && cardId.length >= 12 },
   );
+  const isRetrogradeSupportCard = Boolean(
+    parseRetrogradeSupportContext(card?.description),
+  );
   const { data: supersetProjects = [], isLoading: isLoadingProjects } =
     api.superset.listProjects.useQuery(undefined, {
-      enabled: !isTemplate,
+      enabled: !isTemplate && !isRetrogradeSupportCard,
       retry: false,
     });
   const launchAgent = api.superset.launchAgentFromCard.useMutation({
@@ -209,8 +212,8 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
       showPopup({
         header: "Agent started",
         message: run.supersetUrl
-          ? "Superset is working on this card."
-          : "Superset accepted the task.",
+          ? `${run.agent === "ari-gold" ? "Ari Gold" : "Superset"} is working on this card.`
+          : `${run.agent === "ari-gold" ? "Ari Gold" : "Superset"} accepted the task.`,
         icon: "success",
       });
     },
@@ -232,11 +235,22 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
   const selectedLabels = card?.labels;
   const selectedMembers = card?.members;
   const latestAgentRun = card?.agentRuns[0];
+  const agentIsRunning =
+    latestAgentRun?.status === "requested" ||
+    latestAgentRun?.status === "running";
+  const agentButtonLabel = agentIsRunning
+    ? "Agent running"
+    : latestAgentRun?.status === "ready_for_review"
+      ? "Ready for review"
+      : latestAgentRun?.status === "needs_input"
+        ? "Needs input"
+        : "Start agent";
   const canLaunchAgent =
     canEdit &&
     Boolean(card) &&
-    Boolean(selectedProjectId) &&
-    !isLoadingProjects &&
+    (isRetrogradeSupportCard || Boolean(selectedProjectId)) &&
+    (isRetrogradeSupportCard || !isLoadingProjects) &&
+    !agentIsRunning &&
     !launchAgent.isPending;
 
   useEffect(() => {
@@ -335,7 +349,7 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
           disabled={!canEdit}
         />
       </div>
-      {!isTemplate && (
+      {!isTemplate && !isRetrogradeSupportCard && (
         <div className="mb-4 flex w-full flex-row">
           <p className="my-2 mb-2 w-[100px] text-sm font-medium">Project</p>
           <div className="min-w-0 flex-1">
@@ -367,24 +381,27 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
           <div className="min-w-0 flex-1">
             <Button
               type="button"
-              variant={
-                latestAgentRun?.status === "running" ? "primary" : "secondary"
-              }
+              variant={agentIsRunning ? "primary" : "secondary"}
               iconLeft={<HiOutlineCommandLine />}
               disabled={!canLaunchAgent}
               isLoading={launchAgent.isPending}
               onClick={() => {
-                if (!cardId || !selectedProjectId) return;
+                if (
+                  !cardId ||
+                  (!isRetrogradeSupportCard && !selectedProjectId)
+                ) {
+                  return;
+                }
                 launchAgent.mutate({
                   cardPublicId: cardId,
-                  projectId: selectedProjectId,
+                  projectId: isRetrogradeSupportCard
+                    ? undefined
+                    : selectedProjectId,
                 });
               }}
               fullWidth
             >
-              {latestAgentRun?.status === "running"
-                ? "Agent running"
-                : "Start agent"}
+              {agentButtonLabel}
             </Button>
             {latestAgentRun && (
               <div className="mt-2 text-xs text-light-800 dark:text-dark-800">
@@ -397,7 +414,7 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Open Superset run
+                    Open agent run
                   </a>
                 ) : (
                   <p>{latestAgentRun.agent}</p>

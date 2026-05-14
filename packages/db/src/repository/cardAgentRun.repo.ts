@@ -79,6 +79,52 @@ export const markFailed = async (
   return run;
 };
 
+export const markNeedsInput = async (
+  db: dbClient,
+  args: { publicId: string; response: unknown },
+) => {
+  const [run] = await db
+    .update(cardAgentRuns)
+    .set({
+      status: "needs_input",
+      response: args.response,
+      error: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(cardAgentRuns.publicId, args.publicId))
+    .returning();
+
+  if (!run) throw new Error("Unable to update card agent run");
+
+  return run;
+};
+
+export const markReadyForReview = async (
+  db: dbClient,
+  args: { publicId: string; response: unknown },
+) => {
+  const [run] = await db
+    .update(cardAgentRuns)
+    .set({
+      status: "ready_for_review",
+      response: args.response,
+      error: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(cardAgentRuns.publicId, args.publicId))
+    .returning();
+
+  if (!run) throw new Error("Unable to update card agent run");
+
+  return run;
+};
+
+export const getByPublicId = (db: dbClient, publicId: string) => {
+  return db.query.cardAgentRuns.findFirst({
+    where: eq(cardAgentRuns.publicId, publicId),
+  });
+};
+
 export const listByCardId = (db: dbClient, cardId: number) => {
   return db.query.cardAgentRuns.findMany({
     where: eq(cardAgentRuns.cardId, cardId),

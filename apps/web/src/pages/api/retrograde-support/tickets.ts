@@ -19,10 +19,16 @@ export const config = {
 };
 
 const DEFAULT_WORKSPACE_SLUG = "retrograde-support";
-const DEFAULT_WORKSPACE_NAME = "Retrograde Support";
+const DEFAULT_WORKSPACE_NAME = "Creator Compute Company Support";
 const DEFAULT_BOARD_SLUG = "customer-support";
 const DEFAULT_BOARD_NAME = "Customer Support";
-const DEFAULT_LIST_NAMES = ["New", "Investigating", "Bug Raised", "Resolved"];
+const DEFAULT_LIST_NAMES = [
+  "New",
+  "Investigating",
+  "Bug Raised",
+  "Ready for Review",
+  "Resolved",
+];
 const SUPPORT_BOT_EMAIL = "support-agent@getretrograde.ai";
 const SIGNATURE_MAX_AGE_MS = 30 * 60 * 1000;
 
@@ -30,6 +36,7 @@ const statusToListName = {
   new: "New",
   investigating: "Investigating",
   bug_raised: "Bug Raised",
+  ready_for_review: "Ready for Review",
   resolved: "Resolved",
 } as const;
 
@@ -67,7 +74,13 @@ const ticketRequestSchema = z.object({
   sanitizedAnswer: z.string().trim().max(4000).optional(),
   priority: z.enum(["urgent", "high", "medium", "low"]).nullable().optional(),
   status: z
-    .enum(["new", "investigating", "bug_raised", "resolved"])
+    .enum([
+      "new",
+      "investigating",
+      "bug_raised",
+      "ready_for_review",
+      "resolved",
+    ])
     .default("new"),
   customer: z
     .object({

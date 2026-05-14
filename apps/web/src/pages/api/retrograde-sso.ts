@@ -22,10 +22,16 @@ import { env } from "~/env";
 const ISSUER = "retrograde-admin";
 const AUDIENCE = "kan-retrograde-support";
 const DEFAULT_WORKSPACE_SLUG = "retrograde-support";
-const DEFAULT_WORKSPACE_NAME = "Retrograde Support";
+const DEFAULT_WORKSPACE_NAME = "Creator Compute Company Support";
 const DEFAULT_BOARD_SLUG = "customer-support";
 const DEFAULT_BOARD_NAME = "Customer Support";
-const DEFAULT_LIST_NAMES = ["New", "Investigating", "Bug Raised", "Resolved"];
+const DEFAULT_LIST_NAMES = [
+  "New",
+  "Investigating",
+  "Bug Raised",
+  "Ready for Review",
+  "Resolved",
+];
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 const db = createDrizzleClient();

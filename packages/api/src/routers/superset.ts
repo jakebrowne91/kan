@@ -3,11 +3,16 @@ import { env } from "next-runtime-env";
 import { z } from "zod";
 
 import * as cardRepo from "@kan/db/repository/card.repo";
-import * as cardAgentRunRepo from "@kan/db/repository/cardAgentRun.repo";
 import * as cardActivityRepo from "@kan/db/repository/cardActivity.repo";
+import * as cardAgentRunRepo from "@kan/db/repository/cardAgentRun.repo";
 import * as listRepo from "@kan/db/repository/list.repo";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+import {
+  buildAriGoldSupportPrompt,
+  getAriGoldRepo,
+  launchAriGoldAgent,
+} from "../utils/ariGold";
 import { assertCanEdit } from "../utils/permissions";
 import {
   buildSupersetPrompt,
@@ -19,7 +24,13 @@ import {
 const responseSchema = z.object({
   publicId: z.string(),
   agent: z.string(),
-  status: z.enum(["requested", "running", "failed"]),
+  status: z.enum([
+    "requested",
+    "running",
+    "needs_input",
+    "ready_for_review",
+    "failed",
+  ]),
   supersetWorkspaceId: z.string().nullable(),
   supersetSessionId: z.string().nullable(),
   supersetUrl: z.string().nullable(),
@@ -28,6 +39,51 @@ const responseSchema = z.object({
 
 const normaliseListName = (value: string) =>
   value.trim().toLowerCase().replace(/\s+/g, " ");
+
+const isRetrogradeSupportCard = (description: string | null) =>
+  Boolean(description?.includes("retrograde-support-ticket:"));
+
+const extractRepoFromDescription = (description: string | null) => {
+  const match = description?.match(/^\s*[-*]\s+Repo:\s*(.+?)\s*$/im);
+  const repo = match?.[1]?.trim();
+  return repo && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) ? repo : null;
+};
+
+async function moveCardToNamedList(args: {
+  db: Parameters<typeof cardRepo.reorder>[0];
+  userId: string;
+  cardId: number;
+  cardPublicId: string;
+  currentListPublicId: string;
+  lists: { publicId: string; name: string }[];
+  targetNames: string[];
+}) {
+  const normalisedTargets = new Set(args.targetNames.map(normaliseListName));
+  const targetList = args.lists.find((list) =>
+    normalisedTargets.has(normaliseListName(list.name)),
+  );
+
+  if (!targetList || targetList.publicId === args.currentListPublicId) return;
+
+  const target = await listRepo.getByPublicId(args.db, targetList.publicId);
+  if (!target) return;
+
+  const currentCard = await cardRepo.getByPublicId(args.db, args.cardPublicId);
+
+  await cardRepo.reorder(args.db, {
+    cardId: args.cardId,
+    newListId: target.id,
+    newIndex: undefined,
+  });
+
+  await cardActivityRepo.create(args.db, {
+    type: "card.updated.list",
+    cardId: args.cardId,
+    createdBy: args.userId,
+    fromListId: currentCard?.listId,
+    toListId: target.id,
+  });
+}
 
 export const supersetRouter = createTRPCRouter({
   listProjects: protectedProcedure
@@ -58,7 +114,7 @@ export const supersetRouter = createTRPCRouter({
     .input(
       z.object({
         cardPublicId: z.string().min(12),
-        projectId: z.string().min(1),
+        projectId: z.string().min(1).optional(),
       }),
     )
     .output(responseSchema)
@@ -110,17 +166,29 @@ export const supersetRouter = createTRPCRouter({
           : null;
       const baseUrl = env("NEXT_PUBLIC_BASE_URL");
       const cardUrl = baseUrl ? `${baseUrl}/cards/${card.publicId}` : null;
-      const agent = process.env.SUPERSET_AGENT?.trim() || "codex";
-      const prompt = buildSupersetPrompt({
-        title: card.title,
-        description: card.description,
-        labels: card.labels.map((label) => label.name),
-        priority: card.priority,
-        boardName: card.list.board.name,
-        listName: card.list.name,
-        ticketNumber,
-        cardUrl,
-      });
+      const isSupportCard = isRetrogradeSupportCard(card.description);
+      const agent = isSupportCard
+        ? "ari-gold"
+        : process.env.SUPERSET_AGENT?.trim() || "codex";
+      const prompt = isSupportCard
+        ? buildAriGoldSupportPrompt({
+            title: card.title,
+            description: card.description,
+            boardName: card.list.board.name,
+            listName: card.list.name,
+            ticketNumber,
+            cardUrl,
+          })
+        : buildSupersetPrompt({
+            title: card.title,
+            description: card.description,
+            labels: card.labels.map((label) => label.name),
+            priority: card.priority,
+            boardName: card.list.board.name,
+            listName: card.list.name,
+            ticketNumber,
+            cardUrl,
+          });
 
       const run = await cardAgentRunRepo.create(ctx.db, {
         cardId: card.id,
@@ -130,61 +198,65 @@ export const supersetRouter = createTRPCRouter({
       });
 
       try {
-        const result = await launchSupersetAgent({
-          cardPublicId: card.publicId,
-          cardTitle: card.title,
-          boardName: card.list.board.name,
-          listName: card.list.name,
-          projectId: input.projectId,
-          branch: toSupersetBranchName(card.publicId, card.title),
-          workspaceName: ticketNumber
-            ? `${ticketNumber} ${card.title}`
-            : `Kan ${card.publicId} ${card.title}`,
-          prompt,
-        });
+        if (!isSupportCard && !input.projectId) {
+          throw new Error("Project is required for Superset card agents");
+        }
+
+        const callbackUrl =
+          isSupportCard && baseUrl?.startsWith("https://")
+            ? `${baseUrl}/api/retrograde-support/agent-callback`
+            : undefined;
+        const result = isSupportCard
+          ? await launchAriGoldAgent({
+              eventId: `gsd-card:${card.publicId}:${run.publicId}`,
+              title: ticketNumber
+                ? `${ticketNumber} ${card.title}`
+                : `GSD ${card.publicId} ${card.title}`,
+              repo: getAriGoldRepo(
+                extractRepoFromDescription(card.description),
+              ),
+              prompt,
+              callbackUrl,
+              supportContext: {
+                cardPublicId: card.publicId,
+                cardAgentRunPublicId: run.publicId,
+                cardUrl,
+                ticketNumber,
+                boardName: card.list.board.name,
+                listName: card.list.name,
+              },
+            })
+          : await launchSupersetAgent({
+              cardPublicId: card.publicId,
+              cardTitle: card.title,
+              boardName: card.list.board.name,
+              listName: card.list.name,
+              projectId: input.projectId!,
+              branch: toSupersetBranchName(card.publicId, card.title),
+              workspaceName: ticketNumber
+                ? `${ticketNumber} ${card.title}`
+                : `Kan ${card.publicId} ${card.title}`,
+              prompt,
+            });
 
         const updatedRun = await cardAgentRunRepo.markRunning(ctx.db, {
           publicId: run.publicId,
-          supersetWorkspaceId: result.workspaceId,
+          supersetWorkspaceId:
+            "workspaceId" in result ? result.workspaceId : null,
           supersetSessionId: result.sessionId,
           supersetUrl: result.url,
           response: result.response,
         });
 
-        const inProgressList = card.list.board.lists.find(
-          (list) => normaliseListName(list.name) === "in progress",
-        );
-
-        if (
-          inProgressList &&
-          inProgressList.publicId !== cardSummary.listPublicId
-        ) {
-          const targetList = await listRepo.getByPublicId(
-            ctx.db,
-            inProgressList.publicId,
-          );
-
-          if (targetList) {
-            const currentCard = await cardRepo.getByPublicId(
-              ctx.db,
-              input.cardPublicId,
-            );
-
-            await cardRepo.reorder(ctx.db, {
-              cardId: card.id,
-              newListId: targetList.id,
-              newIndex: undefined,
-            });
-
-            await cardActivityRepo.create(ctx.db, {
-              type: "card.updated.list",
-              cardId: card.id,
-              createdBy: userId,
-              fromListId: currentCard?.listId,
-              toListId: targetList.id,
-            });
-          }
-        }
+        await moveCardToNamedList({
+          db: ctx.db,
+          userId,
+          cardId: card.id,
+          cardPublicId: input.cardPublicId,
+          currentListPublicId: cardSummary.listPublicId,
+          lists: card.list.board.lists,
+          targetNames: isSupportCard ? ["Investigating"] : ["In Progress"],
+        });
 
         return {
           publicId: updatedRun.publicId,
