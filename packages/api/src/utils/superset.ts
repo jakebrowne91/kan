@@ -297,16 +297,19 @@ const createWorkspaceViaCurrentHostApi = async (
     enabled: true,
   };
 
-  const automation = await client.automations.create({
+  const automationInput = {
     name: `${args.workspaceName} (${args.agent})`,
     prompt: args.prompt,
+    agent: args.agent,
     agentConfig,
     targetHostId: args.hostId,
     v2WorkspaceId: created.workspace.id,
     rrule: "FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=31",
     timezone: "UTC",
     mcpScope: [],
-  });
+  } as Parameters<typeof client.automations.create>[0] & { agent: string };
+
+  const automation = await client.automations.create(automationInput);
 
   const agentRun = await client.automations.run(automation.id);
   const hydratedAgentRun = await waitForAutomationRunTarget(client, agentRun);
@@ -334,16 +337,19 @@ const dispatchProjectAutomation = async (
     enabled: true,
   };
 
-  const automation = await client.automations.create({
+  const automationInput = {
     name: `${args.workspaceName} (${args.agent})`,
     prompt: args.prompt,
+    agent: args.agent,
     agentConfig,
     targetHostId: args.hostId,
     v2ProjectId: args.projectId,
     rrule: "FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=31",
     timezone: "UTC",
     mcpScope: [],
-  });
+  } as Parameters<typeof client.automations.create>[0] & { agent: string };
+
+  const automation = await client.automations.create(automationInput);
 
   const agentRun = await client.automations.run(automation.id);
   const hydratedAgentRun = await waitForAutomationRunTarget(client, agentRun);
