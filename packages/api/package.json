@@ -36,6 +36,10 @@
       "types": "./dist/utils/permissions.d.ts",
       "default": "./src/utils/permissions.ts"
     },
+    "./utils/ariGold": {
+      "types": "./dist/utils/ariGold.d.ts",
+      "default": "./src/utils/ariGold.ts"
+    },
     "./utils/superset": {
       "types": "./dist/utils/superset.d.ts",
       "default": "./src/utils/superset.ts"

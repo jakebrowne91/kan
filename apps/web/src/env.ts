@@ -22,6 +22,12 @@ export const env = createEnv({
     RETROGRADE_SUPPORT_WORKSPACE_NAME: z.string().optional(),
     RETROGRADE_SUPPORT_BOARD_SLUG: z.string().optional(),
     RETROGRADE_SUPPORT_BOARD_NAME: z.string().optional(),
+    ARI_GOLD_EXTERNAL_AGENT_WEBHOOK_URL: z.string().url().optional(),
+    ARI_GOLD_EXTERNAL_AGENT_WEBHOOK_SECRET: z.string().optional(),
+    ARI_GOLD_DEFAULT_REPO: z.string().optional(),
+    ARI_GOLD_DEFAULT_MODEL: z.string().optional(),
+    ARI_GOLD_DEFAULT_REASONING_EFFORT: z.string().optional(),
+    ARI_GOLD_DEFAULT_CODING_AGENT: z.enum(["opencode", "pi"]).optional(),
     BETTER_AUTH_TRUSTED_ORIGINS: z
       .string()
       .transform((s) => (s === "" ? undefined : s))

@@ -8,6 +8,11 @@ import * as cardAgentRunRepo from "@kan/db/repository/cardAgentRun.repo";
 import * as listRepo from "@kan/db/repository/list.repo";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+import {
+  buildAriGoldSupportPrompt,
+  getAriGoldRepo,
+  launchAriGoldAgent,
+} from "../utils/ariGold";
 import { assertCanEdit } from "../utils/permissions";
 import {
   buildSupersetPrompt,
@@ -25,6 +30,7 @@ const responseSchema = z.object({
     "running",
     "needs_input",
     "ready_for_review",
+    "completed",
     "failed",
   ]),
   supersetWorkspaceId: z.string().nullable(),
@@ -38,6 +44,12 @@ const normaliseListName = (value: string) =>
 
 const isRetrogradeSupportCard = (description: string | null) =>
   Boolean(description?.includes("retrograde-support-ticket:"));
+
+const extractRepoFromDescription = (description: string | null) => {
+  const match = description?.match(/^\s*[-*]\s+Repo:\s*(.+?)\s*$/im);
+  const repo = match?.[1]?.trim();
+  return repo && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) ? repo : null;
+};
 
 async function moveCardToNamedList(args: {
   db: Parameters<typeof cardRepo.reorder>[0];
@@ -157,17 +169,26 @@ export const supersetRouter = createTRPCRouter({
       const baseUrl = env("NEXT_PUBLIC_BASE_URL");
       const cardUrl = baseUrl ? `${baseUrl}/cards/${card.publicId}` : null;
       const isSupportCard = isRetrogradeSupportCard(card.description);
-      const agent = getSupersetAgentName();
-      const prompt = buildSupersetPrompt({
-        title: card.title,
-        description: card.description,
-        labels: card.labels.map((label) => label.name),
-        priority: card.priority,
-        boardName: card.list.board.name,
-        listName: card.list.name,
-        ticketNumber,
-        cardUrl,
-      });
+      const agent = isSupportCard ? "ari-gold" : getSupersetAgentName();
+      const prompt = isSupportCard
+        ? buildAriGoldSupportPrompt({
+            title: card.title,
+            description: card.description,
+            boardName: card.list.board.name,
+            listName: card.list.name,
+            ticketNumber,
+            cardUrl,
+          })
+        : buildSupersetPrompt({
+            title: card.title,
+            description: card.description,
+            labels: card.labels.map((label) => label.name),
+            priority: card.priority,
+            boardName: card.list.board.name,
+            listName: card.list.name,
+            ticketNumber,
+            cardUrl,
+          });
 
       const run = await cardAgentRunRepo.create(ctx.db, {
         cardId: card.id,
@@ -181,22 +202,59 @@ export const supersetRouter = createTRPCRouter({
           throw new Error("Project is required for Superset card agents");
         }
 
-        const result = await launchSupersetAgent({
-          cardPublicId: card.publicId,
-          cardTitle: card.title,
-          boardName: card.list.board.name,
-          listName: card.list.name,
-          projectId: input.projectId,
-          branch: toSupersetBranchName(card.publicId, card.title),
-          workspaceName: ticketNumber
-            ? `${ticketNumber} ${card.title}`
-            : `Kan ${card.publicId} ${card.title}`,
-          prompt,
-        });
+        const callbackUrl =
+          isSupportCard && baseUrl?.startsWith("https://")
+            ? `${baseUrl}/api/retrograde-support/agent-callback`
+            : undefined;
+        const result = isSupportCard
+          ? await launchAriGoldAgent({
+              eventId: `gsd-card:${card.publicId}:${run.publicId}`,
+              title: ticketNumber
+                ? `${ticketNumber} ${card.title}`
+                : `GSD ${card.publicId} ${card.title}`,
+              repo: getAriGoldRepo(
+                extractRepoFromDescription(card.description),
+              ),
+              prompt,
+              callbackUrl,
+              supportContext: {
+                cardPublicId: card.publicId,
+                cardAgentRunPublicId: run.publicId,
+                cardUrl,
+                ticketNumber,
+                boardName: card.list.board.name,
+                listName: card.list.name,
+              },
+              gsdTicket: {
+                create: false,
+                title: card.title,
+                summary: card.description ?? undefined,
+                priority:
+                  card.priority === "urgent" ||
+                  card.priority === "high" ||
+                  card.priority === "medium" ||
+                  card.priority === "low"
+                    ? card.priority
+                    : "medium",
+              },
+            })
+          : await launchSupersetAgent({
+              cardPublicId: card.publicId,
+              cardTitle: card.title,
+              boardName: card.list.board.name,
+              listName: card.list.name,
+              projectId: input.projectId,
+              branch: toSupersetBranchName(card.publicId, card.title),
+              workspaceName: ticketNumber
+                ? `${ticketNumber} ${card.title}`
+                : `Kan ${card.publicId} ${card.title}`,
+              prompt,
+            });
 
         const updatedRun = await cardAgentRunRepo.markRunning(ctx.db, {
           publicId: run.publicId,
-          supersetWorkspaceId: result.workspaceId,
+          supersetWorkspaceId:
+            "workspaceId" in result ? result.workspaceId : null,
           supersetSessionId: result.sessionId,
           supersetUrl: result.url,
           response: result.response,
@@ -223,7 +281,9 @@ export const supersetRouter = createTRPCRouter({
         };
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "Unable to start Superset";
+          error instanceof Error
+            ? error.message
+            : `Unable to start ${isSupportCard ? "Ari Gold" : "Superset"}`;
         const failedRun = await cardAgentRunRepo.markFailed(ctx.db, {
           publicId: run.publicId,
           error: message,

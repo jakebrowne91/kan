@@ -4,11 +4,10 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
-  buildSupersetPrompt,
-  getSupersetAgentName,
-  launchSupersetAgent,
-  toSupersetBranchName,
-} from "@kan/api/utils/superset";
+  buildAriGoldSupportPrompt,
+  getAriGoldRepo,
+  launchAriGoldAgent,
+} from "@kan/api/utils/ariGold";
 import { createDrizzleClient } from "@kan/db/client";
 import * as boardRepo from "@kan/db/repository/board.repo";
 import * as cardRepo from "@kan/db/repository/card.repo";
@@ -497,6 +496,16 @@ function getCardUrl(baseUrl: string, cardPublicId: string) {
   return baseUrl ? `${baseUrl}/cards/${cardPublicId}` : null;
 }
 
+const extractRepoFromTicket = (input: TicketRequest) => {
+  const repo =
+    input.parameters?.repoFullName?.trim() ??
+    input.ari?.repo?.trim() ??
+    input.metadata?.repoFullName;
+
+  if (typeof repo !== "string") return null;
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) ? repo : null;
+};
+
 async function findExistingTicket(
   db: DbClient,
   boardId: number,
@@ -580,12 +589,10 @@ async function maybeLaunchSupportCodingAgent(args: {
   const cardUrl = getCardUrl(args.baseUrl, args.card.publicId);
   const ticketNumber =
     args.card.cardNumber != null ? `RS-${args.card.cardNumber}` : null;
-  const agent = getSupersetAgentName();
-  const prompt = buildSupersetPrompt({
+  const agent = "ari-gold";
+  const prompt = buildAriGoldSupportPrompt({
     title: args.input.title,
     description: args.description,
-    labels: [],
-    priority: args.input.priority ?? null,
     boardName: args.board.name,
     listName: "Bug Raised",
     ticketNumber,
@@ -599,21 +606,37 @@ async function maybeLaunchSupportCodingAgent(args: {
   });
 
   try {
-    const result = await launchSupersetAgent({
-      cardPublicId: args.card.publicId,
-      cardTitle: args.input.title,
-      boardName: args.board.name,
-      listName: "Bug Raised",
-      projectId: null,
-      branch: toSupersetBranchName(args.card.publicId, args.input.title),
-      workspaceName: ticketNumber
+    const callbackUrl = args.baseUrl.startsWith("https://")
+      ? `${args.baseUrl}/api/retrograde-support/agent-callback`
+      : undefined;
+    const result = await launchAriGoldAgent({
+      eventId: `gsd-card:${args.card.publicId}:${run.publicId}`,
+      title: ticketNumber
         ? `${ticketNumber} ${args.input.title}`
         : `GSD ${args.card.publicId} ${args.input.title}`,
+      repo: getAriGoldRepo(extractRepoFromTicket(args.input)),
       prompt,
+      callbackUrl,
+      supportContext: {
+        cardPublicId: args.card.publicId,
+        cardAgentRunPublicId: run.publicId,
+        cardUrl,
+        ticketNumber,
+        boardName: args.board.name,
+        listName: "Bug Raised",
+        ...getHardParameters(args.input),
+      },
+      gsdTicket: {
+        create: false,
+        title: args.input.title,
+        summary: args.input.summary ?? args.input.details,
+        priority: args.input.priority ?? "medium",
+        parameters: getHardParameters(args.input),
+      },
     });
     const updatedRun = await cardAgentRunRepo.markRunning(args.db, {
       publicId: run.publicId,
-      supersetWorkspaceId: result.workspaceId,
+      supersetWorkspaceId: null,
       supersetSessionId: result.sessionId,
       supersetUrl: result.url,
       response: result.response,
@@ -639,7 +662,7 @@ async function maybeLaunchSupportCodingAgent(args: {
     };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to start Superset agent";
+      error instanceof Error ? error.message : "Unable to start Ari Gold";
     const failedRun = await cardAgentRunRepo.markFailed(args.db, {
       publicId: run.publicId,
       error: message,

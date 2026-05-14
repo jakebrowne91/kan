@@ -209,11 +209,12 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
         window.location.href = run.supersetUrl;
       }
 
+      const agentName = run.agent === "ari-gold" ? "Ari Gold" : "Superset";
       showPopup({
         header: "Agent started",
         message: run.supersetUrl
-          ? "Superset is working on this card."
-          : "Superset accepted the task.",
+          ? `${agentName} is working on this card.`
+          : `${agentName} accepted the task.`,
         icon: "success",
       });
     },
@@ -242,9 +243,11 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
     ? "Agent running"
     : latestAgentRun?.status === "ready_for_review"
       ? "Ready for review"
-      : latestAgentRun?.status === "needs_input"
-        ? "Needs input"
-        : "Start agent";
+      : latestAgentRun?.status === "completed"
+        ? "Resolved"
+        : latestAgentRun?.status === "needs_input"
+          ? "Needs input"
+          : "Start agent";
   const canLaunchAgent =
     canEdit &&
     Boolean(card) &&
