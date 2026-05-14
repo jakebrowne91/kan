@@ -212,8 +212,8 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
       showPopup({
         header: "Agent started",
         message: run.supersetUrl
-          ? `${run.agent === "ari-gold" ? "Ari Gold" : "Superset"} is working on this card.`
-          : `${run.agent === "ari-gold" ? "Ari Gold" : "Superset"} accepted the task.`,
+          ? "Superset is working on this card."
+          : "Superset accepted the task.",
         icon: "success",
       });
     },

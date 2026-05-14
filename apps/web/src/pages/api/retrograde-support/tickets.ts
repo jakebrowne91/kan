@@ -3,9 +3,17 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  buildSupersetPrompt,
+  getSupersetAgentName,
+  launchSupersetAgent,
+  toSupersetBranchName,
+} from "@kan/api/utils/superset";
 import { createDrizzleClient } from "@kan/db/client";
 import * as boardRepo from "@kan/db/repository/board.repo";
 import * as cardRepo from "@kan/db/repository/card.repo";
+import * as cardActivityRepo from "@kan/db/repository/cardActivity.repo";
+import * as cardAgentRunRepo from "@kan/db/repository/cardAgentRun.repo";
 import * as listRepo from "@kan/db/repository/list.repo";
 import * as workspaceRepo from "@kan/db/repository/workspace.repo";
 import { boards, cards, lists, users, workspaces } from "@kan/db/schema";
@@ -104,6 +112,11 @@ const ticketRequestSchema = z.object({
 
 type TicketRequest = z.infer<typeof ticketRequestSchema>;
 type DbClient = ReturnType<typeof createDrizzleClient>;
+interface SupportList {
+  id: number;
+  publicId: string;
+  name: string;
+}
 
 let dbSingleton: DbClient | null = null;
 
@@ -480,6 +493,10 @@ function getBaseUrl(req: NextApiRequest) {
   return host ? `${proto}://${host}` : "";
 }
 
+function getCardUrl(baseUrl: string, cardPublicId: string) {
+  return baseUrl ? `${baseUrl}/cards/${cardPublicId}` : null;
+}
+
 async function findExistingTicket(
   db: DbClient,
   boardId: number,
@@ -510,6 +527,135 @@ async function findExistingTicket(
 
 function jsonError(res: NextApiResponse, status: number, error: string) {
   return res.status(status).json({ ok: false, error });
+}
+
+async function moveCardToSupportList(args: {
+  db: DbClient;
+  userId: string;
+  cardId: number;
+  currentListId: number;
+  supportLists: SupportList[];
+  targetListName: (typeof DEFAULT_LIST_NAMES)[number];
+}) {
+  const targetList = args.supportLists.find(
+    (list) => list.name === args.targetListName,
+  );
+
+  if (!targetList || targetList.id === args.currentListId) return null;
+
+  await cardRepo.reorder(args.db, {
+    cardId: args.cardId,
+    newListId: targetList.id,
+    newIndex: undefined,
+  });
+
+  await cardActivityRepo.create(args.db, {
+    type: "card.updated.list",
+    cardId: args.cardId,
+    createdBy: args.userId,
+    fromListId: args.currentListId,
+    toListId: targetList.id,
+  });
+
+  return targetList;
+}
+
+async function maybeLaunchSupportCodingAgent(args: {
+  db: DbClient;
+  input: TicketRequest;
+  userId: string;
+  card: {
+    id: number;
+    listId: number;
+    publicId: string;
+    cardNumber: number | null;
+  };
+  description: string;
+  board: { name: string };
+  supportLists: SupportList[];
+  baseUrl: string;
+}) {
+  if (args.input.status !== "bug_raised") return null;
+
+  const cardUrl = getCardUrl(args.baseUrl, args.card.publicId);
+  const ticketNumber =
+    args.card.cardNumber != null ? `RS-${args.card.cardNumber}` : null;
+  const agent = getSupersetAgentName();
+  const prompt = buildSupersetPrompt({
+    title: args.input.title,
+    description: args.description,
+    labels: [],
+    priority: args.input.priority ?? null,
+    boardName: args.board.name,
+    listName: "Bug Raised",
+    ticketNumber,
+    cardUrl,
+  });
+  const run = await cardAgentRunRepo.create(args.db, {
+    cardId: args.card.id,
+    createdBy: args.userId,
+    agent,
+    prompt,
+  });
+
+  try {
+    const result = await launchSupersetAgent({
+      cardPublicId: args.card.publicId,
+      cardTitle: args.input.title,
+      boardName: args.board.name,
+      listName: "Bug Raised",
+      projectId: null,
+      branch: toSupersetBranchName(args.card.publicId, args.input.title),
+      workspaceName: ticketNumber
+        ? `${ticketNumber} ${args.input.title}`
+        : `GSD ${args.card.publicId} ${args.input.title}`,
+      prompt,
+    });
+    const updatedRun = await cardAgentRunRepo.markRunning(args.db, {
+      publicId: run.publicId,
+      supersetWorkspaceId: result.workspaceId,
+      supersetSessionId: result.sessionId,
+      supersetUrl: result.url,
+      response: result.response,
+    });
+    const investigatingList = await moveCardToSupportList({
+      db: args.db,
+      userId: args.userId,
+      cardId: args.card.id,
+      currentListId: args.card.listId,
+      supportLists: args.supportLists,
+      targetListName: "Investigating",
+    });
+
+    return {
+      publicId: updatedRun.publicId,
+      agent: updatedRun.agent,
+      status: updatedRun.status,
+      supersetWorkspaceId: updatedRun.supersetWorkspaceId,
+      supersetSessionId: updatedRun.supersetSessionId,
+      supersetUrl: updatedRun.supersetUrl,
+      error: updatedRun.error,
+      listPublicId: investigatingList?.publicId ?? null,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to start Superset agent";
+    const failedRun = await cardAgentRunRepo.markFailed(args.db, {
+      publicId: run.publicId,
+      error: message,
+    });
+
+    return {
+      publicId: failedRun.publicId,
+      agent: failedRun.agent,
+      status: failedRun.status,
+      supersetWorkspaceId: failedRun.supersetWorkspaceId,
+      supersetSessionId: failedRun.supersetSessionId,
+      supersetUrl: failedRun.supersetUrl,
+      error: failedRun.error ?? message,
+      listPublicId: null,
+    };
+  }
 }
 
 export default async function handler(
@@ -574,14 +720,25 @@ export default async function handler(
       return;
     }
 
+    const description = renderDescription(input, marker);
     const card = await cardRepo.create(db, {
       title: input.title,
-      description: renderDescription(input, marker),
+      description,
       createdBy: user.id,
       listId: targetList.id,
       workspaceId: workspace.id,
       position: "end",
       priority: input.priority ?? null,
+    });
+    const agentRun = await maybeLaunchSupportCodingAgent({
+      db,
+      input,
+      userId: user.id,
+      card,
+      description,
+      board,
+      supportLists,
+      baseUrl,
     });
 
     res.status(200).json({
@@ -589,10 +746,11 @@ export default async function handler(
       duplicate: false,
       cardPublicId: card.publicId,
       cardNumber: card.cardNumber,
-      cardUrl: baseUrl ? `${baseUrl}/cards/${card.publicId}` : null,
+      cardUrl: getCardUrl(baseUrl, card.publicId),
       boardPublicId: board.publicId,
       workspacePublicId: workspace.publicId,
-      listPublicId: targetList.publicId,
+      listPublicId: agentRun?.listPublicId ?? targetList.publicId,
+      agentRun,
     });
   } catch (error) {
     console.error("Failed to create Retrograde support ticket", error);

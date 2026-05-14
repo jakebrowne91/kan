@@ -35,6 +35,10 @@
     "./utils/permissions": {
       "types": "./dist/utils/permissions.d.ts",
       "default": "./src/utils/permissions.ts"
+    },
+    "./utils/superset": {
+      "types": "./dist/utils/superset.d.ts",
+      "default": "./src/utils/superset.ts"
     }
   },
   "license": "GPL-3.0",
