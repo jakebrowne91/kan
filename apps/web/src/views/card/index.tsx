@@ -243,11 +243,9 @@ export function CardRightPanel({ isTemplate }: { isTemplate?: boolean }) {
     ? "Agent running"
     : latestAgentRun?.status === "ready_for_review"
       ? "Ready for review"
-      : latestAgentRun?.status === "completed"
-        ? "Resolved"
-        : latestAgentRun?.status === "needs_input"
-          ? "Needs input"
-          : "Start agent";
+      : latestAgentRun?.status === "needs_input"
+        ? "Needs input"
+        : "Start agent";
   const canLaunchAgent =
     canEdit &&
     Boolean(card) &&

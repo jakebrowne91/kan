@@ -156,7 +156,6 @@ export const cardDetailSchema = z.object({
         "running",
         "needs_input",
         "ready_for_review",
-        "completed",
         "failed",
       ]),
       supersetWorkspaceId: z.string().nullable(),

@@ -450,7 +450,7 @@ export default async function handler(
       response: { ...response, ticketUpdate: update, ticketStatus },
     });
   } else if (ticketStatus === "resolved") {
-    await cardAgentRunRepo.markCompleted(db, {
+    await cardAgentRunRepo.markReadyForReview(db, {
       publicId: event.runPublicId,
       response: { ...response, ticketUpdate: update, ticketStatus },
     });

@@ -20,7 +20,6 @@ export const cardAgentRunStatusEnum = pgEnum("card_agent_run_status", [
   "running",
   "needs_input",
   "ready_for_review",
-  "completed",
   "failed",
 ]);
 
