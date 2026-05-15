@@ -18,6 +18,8 @@ import { users } from "./users";
 export const cardAgentRunStatusEnum = pgEnum("card_agent_run_status", [
   "requested",
   "running",
+  "needs_input",
+  "ready_for_review",
   "failed",
 ]);
 

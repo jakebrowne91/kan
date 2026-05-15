@@ -2,15 +2,18 @@
 
 ARG NODE_VERSION=20
 ARG DISTROLESS_NODE_IMAGE=gcr.io/distroless/nodejs${NODE_VERSION}-debian12
+ARG PNPM_VERSION=9.14.2
 
 # ============================================
 # Stage 1: Alpine base with pnpm and turbo
 # ============================================
 FROM node:${NODE_VERSION}-alpine AS alpine
+ARG PNPM_VERSION
 RUN apk update && \
     apk add --no-cache libc6-compat && \
     rm -rf /var/cache/apk/* /tmp/* || true && \
     corepack enable && \
+    corepack prepare pnpm@${PNPM_VERSION} --activate && \
     npm install turbo@2.3.1 --global && \
     pnpm config set store-dir /root/.pnpm-store
 

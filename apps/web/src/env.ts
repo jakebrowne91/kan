@@ -16,6 +16,18 @@ export const env = createEnv({
   server: {
     KAN_ADMIN_API_KEY: z.string().optional(),
     BETTER_AUTH_SECRET: z.string(),
+    RETROGRADE_GSD_SSO_SECRET: z.string().optional(),
+    RETROGRADE_GSD_API_SECRET: z.string().optional(),
+    RETROGRADE_SUPPORT_WORKSPACE_SLUG: z.string().optional(),
+    RETROGRADE_SUPPORT_WORKSPACE_NAME: z.string().optional(),
+    RETROGRADE_SUPPORT_BOARD_SLUG: z.string().optional(),
+    RETROGRADE_SUPPORT_BOARD_NAME: z.string().optional(),
+    ARI_GOLD_EXTERNAL_AGENT_WEBHOOK_URL: z.string().url().optional(),
+    ARI_GOLD_EXTERNAL_AGENT_WEBHOOK_SECRET: z.string().optional(),
+    ARI_GOLD_DEFAULT_REPO: z.string().optional(),
+    ARI_GOLD_DEFAULT_MODEL: z.string().optional(),
+    ARI_GOLD_DEFAULT_REASONING_EFFORT: z.string().optional(),
+    ARI_GOLD_DEFAULT_CODING_AGENT: z.enum(["opencode", "pi"]).optional(),
     BETTER_AUTH_TRUSTED_ORIGINS: z
       .string()
       .transform((s) => (s === "" ? undefined : s))
@@ -93,6 +105,7 @@ export const env = createEnv({
     NEXT_PUBLIC_USE_STANDALONE_OUTPUT: z.string().optional(),
     NEXT_PUBLIC_BASE_URL: z.string().url().optional(),
     NEXT_PUBLIC_STORAGE_URL: z.string().url().optional(),
+    NEXT_PUBLIC_RETROGRADE_ADMIN_APP_URL: z.string().url().optional(),
     NEXT_PUBLIC_AVATAR_BUCKET_NAME: z.string().optional(),
     NEXT_PUBLIC_ATTACHMENTS_BUCKET_NAME: z.string().optional(),
     NEXT_PUBLIC_STORAGE_DOMAIN: z.string().optional(),
@@ -137,6 +150,8 @@ export const env = createEnv({
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
     NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
     NEXT_PUBLIC_STORAGE_URL: process.env.NEXT_PUBLIC_STORAGE_URL,
+    NEXT_PUBLIC_RETROGRADE_ADMIN_APP_URL:
+      process.env.NEXT_PUBLIC_RETROGRADE_ADMIN_APP_URL,
     NEXT_PUBLIC_AVATAR_BUCKET_NAME: process.env.NEXT_PUBLIC_AVATAR_BUCKET_NAME,
     NEXT_PUBLIC_ATTACHMENTS_BUCKET_NAME:
       process.env.NEXT_PUBLIC_ATTACHMENTS_BUCKET_NAME,

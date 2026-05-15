@@ -531,7 +531,9 @@ export function NewCardForm({
                       >
                         <span
                           className="mr-1.5 h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: label.colourCode }}
+                          style={{
+                            backgroundColor: label.colourCode ?? undefined,
+                          }}
                         />
                         <span className="truncate">{label.name}</span>
                       </button>

@@ -151,7 +151,13 @@ export const cardDetailSchema = z.object({
     z.object({
       publicId: z.string(),
       agent: z.string(),
-      status: z.enum(["requested", "running", "failed"]),
+      status: z.enum([
+        "requested",
+        "running",
+        "needs_input",
+        "ready_for_review",
+        "failed",
+      ]),
       supersetWorkspaceId: z.string().nullable(),
       supersetSessionId: z.string().nullable(),
       supersetUrl: z.string().nullable(),

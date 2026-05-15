@@ -1,51 +1,51 @@
 import type { AgentConfig } from "@superset_sh/sdk";
 import Superset from "@superset_sh/sdk";
 
-type SupersetConfig = {
+interface SupersetConfig {
   apiKey: string;
   organizationId: string;
   agent: string;
   hostId: string | null;
   projectId: string | null;
   agentConfig: AgentConfig | null;
-};
+}
 
-type LaunchAgentInput = {
+interface LaunchAgentInput {
   cardPublicId: string;
   cardTitle: string;
   boardName: string;
   listName: string;
-  projectId: string;
+  projectId?: string | null;
   branch: string;
   workspaceName: string;
   prompt: string;
-};
+}
 
-export type SupersetProject = {
+export interface SupersetProject {
   id: string;
   name: string;
   defaultBranch: string | null;
   mainRepoPath: string | null;
-};
+}
 
-export type LaunchAgentResult = {
+export interface LaunchAgentResult {
   agent: string;
   workspaceId: string | null;
   sessionId: string | null;
   url: string | null;
   response: unknown;
-};
+}
 
-type SupersetWorkspace = {
+interface SupersetWorkspace {
   id: string;
   name?: string;
   branch?: string;
   projectId?: string;
   path?: string;
   type?: string;
-};
+}
 
-type SupersetAgentRun = {
+interface SupersetAgentRun {
   automationId: string;
   runId: string;
   id?: string;
@@ -53,27 +53,28 @@ type SupersetAgentRun = {
   v2WorkspaceId?: string | null;
   terminalSessionId?: string | null;
   chatSessionId?: string | null;
-};
+}
 
-type SupersetAutomationLogRun = Omit<Partial<SupersetAgentRun>, "id"> & {
+interface SupersetAutomationLogRun
+  extends Omit<Partial<SupersetAgentRun>, "id"> {
   id: string;
-};
+}
 
-type CreatedSupersetWorkspace = SupersetWorkspace & {
+interface CreatedSupersetWorkspace extends SupersetWorkspace {
   agentRuns: SupersetAgentRun[];
-};
+}
 
-type WorkspaceCreationCreateResponse = {
+interface WorkspaceCreationCreateResponse {
   workspace: SupersetWorkspace;
   terminals?: unknown[];
   warnings?: string[];
-};
+}
 
-type ProjectAutomationDispatch = {
+interface ProjectAutomationDispatch {
   workspace: null;
   agentRuns: SupersetAgentRun[];
   automation: unknown;
-};
+}
 
 const requireEnv = (key: string) => {
   const value = process.env[key]?.trim();
@@ -81,7 +82,14 @@ const requireEnv = (key: string) => {
   return value;
 };
 
-const optionalEnv = (key: string) => process.env[key]?.trim() || null;
+const optionalEnv = (key: string) => {
+  const value = process.env[key]?.trim();
+  if (!value) return null;
+  return value;
+};
+
+export const getSupersetAgentName = () =>
+  optionalEnv("SUPERSET_AGENT") ?? "codex";
 
 const getOptionalObjectString = (value: unknown, key: string) => {
   if (!value || typeof value !== "object") return null;
@@ -118,7 +126,7 @@ const parseAgentConfig = (): AgentConfig | null => {
 const getConfig = (): SupersetConfig => ({
   apiKey: requireEnv("SUPERSET_API_KEY"),
   organizationId: requireEnv("SUPERSET_ORGANIZATION_ID"),
-  agent: process.env.SUPERSET_AGENT?.trim() || "codex",
+  agent: getSupersetAgentName(),
   hostId: optionalEnv("SUPERSET_HOST_ID") ?? optionalEnv("SUPERSET_DEVICE_ID"),
   projectId: optionalEnv("SUPERSET_PROJECT_ID"),
   agentConfig: parseAgentConfig(),
@@ -170,9 +178,7 @@ const isMissingHostProcedureError = (error: unknown, procedure: string) => {
   const message =
     error instanceof Error ? error.message : JSON.stringify(error ?? "");
 
-  return (
-    message.includes("No procedure found") && message.includes(procedure)
-  );
+  return message.includes("No procedure found") && message.includes(procedure);
 };
 
 const getRunString = (
@@ -219,7 +225,7 @@ const waitForAutomationRunTarget = async (
   const hasTarget = (candidate: SupersetAgentRun | undefined) =>
     Boolean(
       getRunString(candidate, "v2WorkspaceId") &&
-        (getRunString(candidate, "terminalSessionId") ||
+        (getRunString(candidate, "terminalSessionId") ??
           getRunString(candidate, "chatSessionId")),
     );
 
@@ -291,16 +297,19 @@ const createWorkspaceViaCurrentHostApi = async (
     enabled: true,
   };
 
-  const automation = await client.automations.create({
+  const automationInput = {
     name: `${args.workspaceName} (${args.agent})`,
     prompt: args.prompt,
+    agent: args.agent,
     agentConfig,
     targetHostId: args.hostId,
     v2WorkspaceId: created.workspace.id,
     rrule: "FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=31",
     timezone: "UTC",
     mcpScope: [],
-  });
+  } as Parameters<typeof client.automations.create>[0] & { agent: string };
+
+  const automation = await client.automations.create(automationInput);
 
   const agentRun = await client.automations.run(automation.id);
   const hydratedAgentRun = await waitForAutomationRunTarget(client, agentRun);
@@ -328,16 +337,19 @@ const dispatchProjectAutomation = async (
     enabled: true,
   };
 
-  const automation = await client.automations.create({
+  const automationInput = {
     name: `${args.workspaceName} (${args.agent})`,
     prompt: args.prompt,
+    agent: args.agent,
     agentConfig,
     targetHostId: args.hostId,
     v2ProjectId: args.projectId,
     rrule: "FREQ=YEARLY;BYMONTH=12;BYMONTHDAY=31",
     timezone: "UTC",
     mcpScope: [],
-  });
+  } as Parameters<typeof client.automations.create>[0] & { agent: string };
+
+  const automation = await client.automations.create(automationInput);
 
   const agentRun = await client.automations.run(automation.id);
   const hydratedAgentRun = await waitForAutomationRunTarget(client, agentRun);
@@ -384,25 +396,28 @@ export const buildSupersetPrompt = (args: {
     args.cardUrl ? `Card URL: ${args.cardUrl}` : null,
     "",
     "Description:",
-    args.description?.trim() || "(No description)",
+    args.description?.trim() ? args.description.trim() : "(No description)",
     "",
     "Expected output:",
-    "- Make the requested code changes.",
+    "- Investigate the root cause before changing code.",
+    "- Make the requested code changes only when the ticket is a real bug or implementation task.",
     "- Keep the implementation scoped to this task.",
     "- Run the relevant checks if available.",
-    "- Commit the work or leave a clear summary of changed files and verification.",
+    "- Commit the work and open a pull request when the environment supports it.",
+    "- If no code change is needed, leave a concise diagnosis and the exact human review/action needed.",
+    "- Never mutate production data unless the ticket explicitly asks for it; leave reviewed SQL or a runbook instead.",
   ]
     .filter((line): line is string => line !== null)
     .join("\n");
 };
 
 export const toSupersetBranchName = (cardPublicId: string, title: string) => {
-  const slug =
-    title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 48) || "kan-task";
+  const normalizedSlug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  const slug = normalizedSlug ? normalizedSlug : "kan-task";
 
   return `kan/${cardPublicId}-${slug}`;
 };
@@ -412,7 +427,7 @@ export const launchSupersetAgent = async (
 ): Promise<LaunchAgentResult> => {
   const config = getConfig();
   const client = createClient(config);
-  const projectId = input.projectId || config.projectId;
+  const projectId = input.projectId ?? config.projectId;
 
   if (!projectId) throw new Error("Superset project is not configured");
 
@@ -456,10 +471,7 @@ export const launchSupersetAgent = async (
       });
     } catch (fallbackError) {
       if (
-        !isMissingHostProcedureError(
-          fallbackError,
-          "workspaceCreation.create",
-        )
+        !isMissingHostProcedureError(fallbackError, "workspaceCreation.create")
       ) {
         throw fallbackError;
       }
